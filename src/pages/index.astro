@@ -1,0 +1,64 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import WhatsappCta from "../components/WhatsappCta.astro";
+---
+
+<BaseLayout
+  title="Investimento em Energia Solar e Eficiência Energética"
+  description="A Maia Energias Renováveis estrutura investimentos em usinas solares para investidores e implementa soluções de eficiência energética para empresas com contas de energia acima de R$50 mil por mês."
+>
+  <section class="bg-gradient-to-b from-maia-navy to-maia-navy-dark text-white">
+    <div class="mx-auto max-w-6xl px-4 py-20 text-center">
+      <h1 class="text-3xl md:text-5xl font-bold leading-tight max-w-3xl mx-auto">
+        A Maia transforma energia em valor
+      </h1>
+      <p class="mt-6 text-lg text-white/80 max-w-2xl mx-auto">
+        Estruturamos ativos reais de energia solar para investidores e implementamos soluções de
+        eficiência energética para empresas que querem reduzir o custo da sua conta de luz.
+      </p>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-4 py-16 grid gap-8 md:grid-cols-2">
+    <div class="rounded-2xl border border-slate-200 p-8">
+      <span class="text-sm font-semibold uppercase tracking-wide text-maia-orange-dark">Para investidores</span>
+      <h2 class="mt-2 text-2xl font-bold text-maia-navy">Invista em usinas solares</h2>
+      <p class="mt-4 text-slate-600 leading-relaxed">
+        Participe de ativos reais de infraestrutura energética, com projetos analisados sob as
+        perspectivas técnica, financeira, regulatória e operacional — retorno projetado, não garantido.
+      </p>
+      <div class="mt-6 flex flex-wrap gap-3">
+        <a href="/investidores" class="inline-flex items-center rounded-full border-2 border-maia-navy px-6 py-3 text-sm font-semibold text-maia-navy hover:bg-maia-navy hover:text-white transition-colors">
+          Conhecer o investimento
+        </a>
+      </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 p-8">
+      <span class="text-sm font-semibold uppercase tracking-wide text-maia-blue">Para empresas</span>
+      <h2 class="mt-2 text-2xl font-bold text-maia-navy">Reduza o custo da sua energia</h2>
+      <p class="mt-4 text-slate-600 leading-relaxed">
+        Para empresas com contas acima de R$50 mil por mês: diagnóstico técnico e financeiro para
+        identificar desperdícios, cobranças indevidas e oportunidades de redução no custo energético.
+      </p>
+      <div class="mt-6 flex flex-wrap gap-3">
+        <a href="/empresas" class="inline-flex items-center rounded-full border-2 border-maia-navy px-6 py-3 text-sm font-semibold text-maia-navy hover:bg-maia-navy hover:text-white transition-colors">
+          Solicitar diagnóstico
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="bg-slate-50">
+    <div class="mx-auto max-w-6xl px-4 py-16 text-center">
+      <h2 class="text-2xl font-bold text-maia-navy">Engenharia, energia e resultado</h2>
+      <p class="mt-4 max-w-2xl mx-auto text-slate-600">
+        Combinamos engenharia e planejamento energético, geração solar fotovoltaica, gestão de
+        créditos de energia, eficiência tarifária, armazenamento e estratégias ambientais como
+        I-REC e créditos de carbono.
+      </p>
+      <div class="mt-8 flex justify-center gap-4">
+        <WhatsappCta message="Olá! Quero saber mais sobre a Maia Energias Renováveis." label="Falar no WhatsApp" />
+      </div>
+    </div>
+  </section>
+</BaseLayout>

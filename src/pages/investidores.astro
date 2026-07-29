@@ -1,0 +1,111 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import WhatsappCta from "../components/WhatsappCta.astro";
+import FaqAccordion from "../components/FaqAccordion.astro";
+import { investorFaq } from "../data/faq";
+
+const comparison = [
+  { aspect: "Investimento inicial", imovel: "R$250 mil – R$400 mil", usina: "A partir de R$300 mil" },
+  { aspect: "Receita mensal estimada", imovel: "R$1.000 a R$2.000", usina: "A partir de R$6.000*" },
+  { aspect: "Despesas", imovel: "IPTU, manutenção, vacância", usina: "Manutenção reduzida" },
+  { aspect: "Retorno médio projetado", imovel: "~0,5% ao mês", usina: "~1,5% a 3% ao mês" },
+  { aspect: "Payback estimado", imovel: "15+ anos", usina: "~3 a 4 anos" },
+];
+
+const serviceSchema = {
+  "@context": "https://schema.org",
+  "@type": "Service",
+  serviceType: "Estruturação de investimento em usina solar fotovoltaica",
+  provider: { "@type": "Organization", name: "Maia Energias Renováveis" },
+  areaServed: "BR",
+  audience: { "@type": "Audience", audienceType: "Investidores pessoa física e jurídica" },
+};
+---
+
+<BaseLayout
+  title="Invista em Usinas Solares"
+  description="Estruturação de investimentos em usinas solares fotovoltaicas: análise técnica, financeira e regulatória, com retorno projetado e payback estimado entre 3 e 4 anos."
+>
+  <script type="application/ld+json" set:html={JSON.stringify(serviceSchema)} slot="head" />
+  <section class="bg-maia-navy text-white">
+    <div class="mx-auto max-w-6xl px-4 py-16">
+      <span class="text-sm font-semibold uppercase tracking-wide text-maia-orange">Investidores</span>
+      <h1 class="mt-2 text-3xl md:text-4xl font-bold max-w-2xl">
+        Invista em energia limpa com visão de longo prazo
+      </h1>
+      <p class="mt-4 text-white/80 max-w-2xl leading-relaxed">
+        A Maia desenvolve e estrutura projetos de usinas solares para investidores que buscam
+        participar de ativos reais de infraestrutura, com geração de energia, potencial de receita
+        recorrente e valorização patrimonial.
+      </p>
+      <div class="mt-8">
+        <WhatsappCta message="Olá! Quero conhecer as oportunidades de investimento em usinas solares." label="Solicitar memorando de investimento" />
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-4 py-16">
+    <h2 class="text-2xl font-bold text-maia-navy">Como funciona</h2>
+    <p class="mt-4 text-slate-600 max-w-3xl leading-relaxed">
+      Cada projeto é analisado sob as perspectivas técnica, financeira, regulatória e operacional,
+      normalmente estruturado por meio de uma SPE (sociedade de propósito específico). O investidor
+      recebe informações sobre localização, capacidade instalada, geração estimada, investimento
+      necessário, custos operacionais, estrutura societária, fluxo de caixa, TIR, VPL, payback,
+      cenário conservador e riscos com as respectivas mitigações.
+    </p>
+    <p class="mt-4 text-slate-600 max-w-3xl leading-relaxed">
+      Além da receita da geração de energia, os projetos podem apresentar oportunidades
+      complementares relacionadas a I-REC, créditos de carbono e estratégias ESG.
+    </p>
+  </section>
+
+  <section class="bg-slate-50">
+    <div class="mx-auto max-w-6xl px-4 py-16">
+      <h2 class="text-2xl font-bold text-maia-navy text-center">Imóvel para aluguel vs. Usina de investimento</h2>
+      <div class="mt-8 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-maia-navy text-white">
+            <tr>
+              <th class="px-4 py-3">Aspecto</th>
+              <th class="px-4 py-3">Imóvel para aluguel</th>
+              <th class="px-4 py-3">Usina de investimento</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              comparison.map((row, i) => (
+                <tr class={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                  <td class="px-4 py-3 font-medium text-maia-navy">{row.aspect}</td>
+                  <td class="px-4 py-3 text-slate-600">{row.imovel}</td>
+                  <td class="px-4 py-3 text-slate-600">{row.usina}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-3 text-xs text-slate-400">
+        * Valores e percentuais são estimativas em cenário conservador, sujeitas às premissas e
+        condições de cada projeto — não constituem garantia de rentabilidade.
+      </p>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-4 py-16">
+    <h2 class="text-2xl font-bold text-maia-navy text-center mb-8">Perguntas frequentes de investidores</h2>
+    <FaqAccordion items={investorFaq} includeSchema={false} />
+  </section>
+
+  <section class="bg-maia-orange">
+    <div class="mx-auto max-w-6xl px-4 py-14 text-center">
+      <h2 class="text-2xl font-bold text-white">Receba a apresentação técnica e financeira do projeto</h2>
+      <div class="mt-6">
+        <WhatsappCta
+          message="Olá! Gostaria de agendar uma reunião para analisar o fluxo financeiro de um projeto de usina solar."
+          label="Agendar reunião"
+          variant="outline"
+        />
+      </div>
+    </div>
+  </section>
+</BaseLayout>

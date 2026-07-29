@@ -1,0 +1,24 @@
+---
+import { whatsappLink } from "../data/site";
+
+interface Props {
+  message: string;
+  label: string;
+  variant?: "solid" | "outline";
+}
+const { message, label, variant = "solid" } = Astro.props;
+---
+
+<a
+  href={whatsappLink(message)}
+  target="_blank"
+  rel="noopener noreferrer"
+  class:list={[
+    "inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition-colors",
+    variant === "solid"
+      ? "bg-maia-orange text-white hover:bg-maia-orange-dark"
+      : "border-2 border-maia-navy text-maia-navy hover:bg-maia-navy hover:text-white",
+  ]}
+>
+  {label}
+</a>

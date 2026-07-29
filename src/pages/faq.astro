@@ -1,0 +1,36 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import FaqAccordion from "../components/FaqAccordion.astro";
+import { investorFaq, businessFaq } from "../data/faq";
+
+const allFaq = [...investorFaq, ...businessFaq];
+---
+
+<BaseLayout
+  title="Perguntas Frequentes"
+  description="Tire suas dúvidas sobre investimento em usinas solares e sobre eficiência energética para empresas na Maia Energias Renováveis."
+>
+  <section class="mx-auto max-w-4xl px-4 py-16">
+    <h1 class="text-3xl md:text-4xl font-bold text-maia-navy text-center">Perguntas Frequentes</h1>
+
+    <h2 class="mt-12 text-xl font-bold text-maia-navy">Investidores</h2>
+    <div class="mt-6">
+      <FaqAccordion items={investorFaq} includeSchema={false} />
+    </div>
+
+    <h2 class="mt-12 text-xl font-bold text-maia-navy">Empresas</h2>
+    <div class="mt-6">
+      <FaqAccordion items={businessFaq} includeSchema={false} />
+    </div>
+
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: allFaq.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: { "@type": "Answer", text: item.answer },
+      })),
+    })} />
+  </section>
+</BaseLayout>

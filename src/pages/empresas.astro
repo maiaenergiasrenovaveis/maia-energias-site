@@ -1,0 +1,115 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import WhatsappCta from "../components/WhatsappCta.astro";
+import FaqAccordion from "../components/FaqAccordion.astro";
+import { businessFaq } from "../data/faq";
+
+const problems = [
+  "Demanda contratada inadequada",
+  "Cobrança por ultrapassagem",
+  "Energia reativa excedente",
+  "Fator de potência inadequado",
+  "Consumo elevado no horário de ponta",
+  "Equipamentos ineficientes",
+  "Subestações subdimensionadas",
+  "Ausência de geração própria",
+];
+
+const solutions = [
+  "Revisão da demanda contratada",
+  "Adequação tarifária",
+  "Correção do fator de potência (bancos de capacitores)",
+  "Usinas solares",
+  "Sistemas de armazenamento de energia (BESS)",
+  "Modernização de subestações",
+  "Automação e monitoramento",
+  "Gestão de cargas",
+];
+
+const serviceSchema = {
+  "@context": "https://schema.org",
+  "@type": "Service",
+  serviceType: "Eficiência energética para empresas",
+  provider: { "@type": "Organization", name: "Maia Energias Renováveis" },
+  areaServed: "BR",
+  audience: {
+    "@type": "BusinessAudience",
+    audienceType: "Empresas com contas de energia elétrica acima de R$50 mil por mês",
+  },
+};
+---
+
+<BaseLayout
+  title="Eficiência Energética para Empresas"
+  description="Diagnóstico técnico e financeiro para empresas com contas de energia acima de R$50 mil por mês: demanda contratada, fator de potência, geração solar e armazenamento de energia."
+>
+  <script type="application/ld+json" set:html={JSON.stringify(serviceSchema)} slot="head" />
+  <section class="bg-maia-navy text-white">
+    <div class="mx-auto max-w-6xl px-4 py-16">
+      <span class="text-sm font-semibold uppercase tracking-wide text-maia-blue">Empresas</span>
+      <h1 class="mt-2 text-3xl md:text-4xl font-bold max-w-2xl">
+        Sua empresa pode estar pagando mais pela energia do que deveria
+      </h1>
+      <p class="mt-4 text-white/80 max-w-2xl leading-relaxed">
+        A Maia identifica os desperdícios e implementa uma solução completa para reduzir o custo
+        energético de empresas com contas de energia elétrica a partir de R$50 mil por mês —
+        indústrias, supermercados, hospitais, hotéis, shoppings, condomínios empresariais e mais.
+      </p>
+      <div class="mt-8">
+        <WhatsappCta message="Olá! Quero solicitar um diagnóstico energético para minha empresa." label="Solicitar diagnóstico energético" />
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-4 py-16 grid gap-10 md:grid-cols-2">
+    <div>
+      <h2 class="text-2xl font-bold text-maia-navy">Onde o desperdício costuma estar</h2>
+      <ul class="mt-6 space-y-3">
+        {
+          problems.map((item) => (
+            <li class="flex items-start gap-3 text-slate-600">
+              <span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-maia-orange" />
+              {item}
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+    <div>
+      <h2 class="text-2xl font-bold text-maia-navy">O que a Maia pode implementar</h2>
+      <ul class="mt-6 space-y-3">
+        {
+          solutions.map((item) => (
+            <li class="flex items-start gap-3 text-slate-600">
+              <span class="mt-1 h-2 w-2 shrink-0 rounded-full bg-maia-blue" />
+              {item}
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <section class="bg-slate-50">
+    <div class="mx-auto max-w-6xl px-4 py-16 text-center">
+      <h2 class="text-2xl font-bold text-maia-navy">Cada empresa tem um perfil de consumo diferente</h2>
+      <p class="mt-4 max-w-2xl mx-auto text-slate-600 leading-relaxed">
+        Dependendo do perfil de consumo, da tarifa, da demanda contratada e das condições da
+        instalação, a combinação de medidas pode gerar economias expressivas — calculadas
+        individualmente após o diagnóstico energético. Não trabalhamos com promessas de economia
+        garantida: cada resultado depende da operação e das características específicas de cada cliente.
+      </p>
+      <div class="mt-8">
+        <WhatsappCta
+          message="Olá! Quero enviar as últimas 12 contas de energia da minha empresa para uma análise preliminar."
+          label="Enviar últimas 12 contas para análise"
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-4 py-16">
+    <h2 class="text-2xl font-bold text-maia-navy text-center mb-8">Perguntas frequentes</h2>
+    <FaqAccordion items={businessFaq} includeSchema={false} />
+  </section>
+</BaseLayout>
