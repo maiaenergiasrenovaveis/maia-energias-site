@@ -2,6 +2,8 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import WhatsappCta from "../components/WhatsappCta.astro";
 import FaqAccordion from "../components/FaqAccordion.astro";
+import InstagramEmbed from "../components/InstagramEmbed.astro";
+import YoutubeEmbed from "../components/YoutubeEmbed.astro";
 import { investorFaq } from "../data/faq";
 
 const comparison = [
@@ -89,6 +91,24 @@ const serviceSchema = {
         condições de cada projeto — não constituem garantia de rentabilidade.
       </p>
     </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-4 py-16">
+    <h2 class="text-2xl font-bold text-maia-navy text-center">Projetos e conteúdo em vídeo</h2>
+    <p class="mt-3 text-center text-slate-600 max-w-2xl mx-auto">
+      Um projeto real de usina solar em Parau/RN e conteúdos sobre investimento em energia solar.
+    </p>
+    <div class="mt-10 grid gap-8 md:grid-cols-2 items-start">
+      <YoutubeEmbed videoId="b1wLOjCM070" title="Usina Solar em Parau-RN" />
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 justify-items-center">
+        <InstagramEmbed url="https://www.instagram.com/p/DR9gzyIEnha/" />
+        <InstagramEmbed url="https://www.instagram.com/p/DR9fIi3kuWT/" />
+      </div>
+    </div>
+    <div class="mt-6 flex justify-center">
+      <InstagramEmbed url="https://www.instagram.com/p/DR9fw7gkmgY/" />
+    </div>
+    <script async src="https://www.instagram.com/embed.js"></script>
   </section>
 
   <section class="mx-auto max-w-6xl px-4 py-16">

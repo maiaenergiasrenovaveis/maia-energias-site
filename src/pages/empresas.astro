@@ -2,6 +2,7 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import WhatsappCta from "../components/WhatsappCta.astro";
 import FaqAccordion from "../components/FaqAccordion.astro";
+import InstagramEmbed from "../components/InstagramEmbed.astro";
 import { businessFaq } from "../data/faq";
 
 const problems = [
@@ -106,6 +107,14 @@ const serviceSchema = {
         />
       </div>
     </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-4 py-16">
+    <h2 class="text-2xl font-bold text-maia-navy text-center">Como funciona na prática</h2>
+    <div class="mt-8 flex justify-center">
+      <InstagramEmbed url="https://www.instagram.com/p/DbGXMycy2Ww/" />
+    </div>
+    <script async src="https://www.instagram.com/embed.js"></script>
   </section>
 
   <section class="mx-auto max-w-6xl px-4 py-16">
