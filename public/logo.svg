@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 60" width="260" height="60">
-  <circle cx="24" cy="30" r="16" fill="#F5A623" />
-  <path d="M24 46 L44 46 L36 30 Z" fill="#5FA746" />
-  <path d="M8 46 L44 46 L44 52 L8 52 Z" fill="#1C75BC" />
-  <text x="54" y="30" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#0B3D62">MAIA</text>
-  <text x="54" y="46" font-family="Arial, sans-serif" font-size="9" letter-spacing="1" fill="#0B3D62">ENERGIAS RENOVAVEIS</text>
-</svg>

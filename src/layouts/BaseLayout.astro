@@ -20,7 +20,7 @@ const organizationSchema = {
   "@type": "Organization",
   name: site.legalName,
   url: siteUrl,
-  logo: `${siteUrl}/logo.svg`,
+  logo: `${siteUrl}/logo.png`,
   email: site.email,
   telephone: `+${site.whatsapp}`,
   sameAs: [site.social.instagram, site.social.facebook],
@@ -52,7 +52,7 @@ const organizationSchema = {
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalUrl} />
-    <meta property="og:image" content={`${siteUrl}/logo.svg`} />
+    <meta property="og:image" content={`${siteUrl}/logo.png`} />
     <meta property="og:locale" content="pt_BR" />
 
     <meta name="twitter:card" content="summary_large_image" />
