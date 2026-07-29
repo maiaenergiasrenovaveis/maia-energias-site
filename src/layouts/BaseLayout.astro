@@ -1,0 +1,72 @@
+---
+import "../styles/global.css";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import { site } from "../data/site";
+
+interface Props {
+  title: string;
+  description: string;
+  path?: string;
+}
+const { title, description, path = Astro.url.pathname } = Astro.props;
+
+const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
+const canonicalUrl = `${siteUrl}${path}`;
+const fullTitle = `${title} | ${site.name}`;
+
+const organizationSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: site.legalName,
+  url: siteUrl,
+  logo: `${siteUrl}/logo.png`,
+  email: site.email,
+  telephone: `+${site.whatsapp}`,
+  sameAs: [site.social.instagram, site.social.facebook],
+  location: site.addresses.map((addr) => ({
+    "@type": "Place",
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: addr.street,
+      addressLocality: addr.city,
+      addressRegion: addr.state,
+      addressCountry: addr.country,
+    },
+  })),
+};
+---
+
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonicalUrl} />
+
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={`${siteUrl}/logo.png`} />
+    <meta property="og:locale" content="pt_BR" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+
+    <script type="application/ld+json" set:html={JSON.stringify(organizationSchema)} />
+    <slot name="head" />
+  </head>
+  <body class="bg-white text-maia-navy">
+    <Header />
+    <main>
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

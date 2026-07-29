@@ -1,0 +1,30 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+
+const posts = (await getCollection("blog")).sort(
+  (a, b) => b.data.publishDate.valueOf() - a.data.publishDate.valueOf()
+);
+---
+
+<BaseLayout
+  title="Blog"
+  description="Conteúdo sobre investimento em usinas solares e eficiência energética para empresas."
+>
+  <section class="mx-auto max-w-4xl px-4 py-16">
+    <h1 class="text-3xl md:text-4xl font-bold text-maia-navy text-center">Blog</h1>
+    <div class="mt-12 space-y-8">
+      {
+        posts.map((post) => (
+          <a href={`/blog/${post.id}`} class="block rounded-xl border border-slate-200 p-6 hover:border-maia-blue transition-colors">
+            <span class="text-xs font-semibold uppercase tracking-wide text-maia-blue">
+              {post.data.audience === "investidores" ? "Investidores" : "Empresas"}
+            </span>
+            <h2 class="mt-2 text-xl font-bold text-maia-navy">{post.data.title}</h2>
+            <p class="mt-2 text-slate-600">{post.data.description}</p>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+</BaseLayout>

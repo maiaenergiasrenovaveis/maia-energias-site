@@ -1,0 +1,46 @@
+---
+import { Image } from "astro:assets";
+import logo from "../assets/logo.png";
+import { site } from "../data/site";
+---
+
+<footer class="bg-maia-navy text-white/90">
+  <div class="mx-auto max-w-6xl px-4 py-12 grid gap-8 md:grid-cols-3">
+    <div>
+      <div class="inline-block rounded-lg bg-white px-3 py-2 mb-4">
+        <Image src={logo} alt="Maia Energias Renováveis" height={40} class="h-10 w-auto" />
+      </div>
+      <p class="text-sm text-white/70">
+        Estruturação de investimentos em usinas solares e eficiência energética para empresas.
+      </p>
+    </div>
+    <div>
+      <h3 class="text-sm font-semibold uppercase tracking-wide text-white/60 mb-3">Contato</h3>
+      <ul class="space-y-2 text-sm">
+        <li><a href={`https://wa.me/${site.whatsapp}`} class="hover:text-maia-orange">{site.whatsappDisplay}</a></li>
+        <li><a href={`mailto:${site.email}`} class="hover:text-maia-orange">{site.email}</a></li>
+        <li class="flex gap-3 pt-1">
+          <a href={site.social.instagram} class="hover:text-maia-orange">Instagram</a>
+          <a href={site.social.facebook} class="hover:text-maia-orange">Facebook</a>
+        </li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="text-sm font-semibold uppercase tracking-wide text-white/60 mb-3">Endereços</h3>
+      <ul class="space-y-3 text-sm text-white/70">
+        {
+          site.addresses.map((addr) => (
+            <li>
+              <strong class="text-white">{addr.label}</strong><br />
+              {addr.street}<br />
+              {addr.city}/{addr.state}
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+  <div class="border-t border-white/10 py-4 text-center text-xs text-white/50">
+    {site.legalName} · CNPJ {site.cnpj} · © {new Date().getFullYear()}
+  </div>
+</footer>

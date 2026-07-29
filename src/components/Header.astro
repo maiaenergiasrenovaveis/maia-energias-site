@@ -1,0 +1,51 @@
+---
+import { Image } from "astro:assets";
+import logoIcon from "../assets/logo-icon.png";
+
+const navItems = [
+  { href: "/investidores", label: "Investidores" },
+  { href: "/empresas", label: "Empresas" },
+  { href: "/sobre", label: "Sobre" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/blog", label: "Blog" },
+  { href: "/contato", label: "Contato" },
+];
+const currentPath = Astro.url.pathname;
+---
+
+<header class="bg-white border-b border-slate-100 sticky top-0 z-50">
+  <div class="mx-auto max-w-6xl px-4 flex items-center justify-between h-20">
+    <a href="/" class="flex items-center gap-2.5">
+      <Image src={logoIcon} alt="" height={44} class="h-11 w-auto" />
+      <span class="leading-tight">
+        <span class="block text-lg font-bold text-maia-navy">MAIA</span>
+        <span class="block text-[10px] font-semibold uppercase tracking-wide text-maia-navy/70">Energias Renováveis</span>
+      </span>
+    </a>
+    <nav class="hidden md:flex items-center gap-6">
+      {
+        navItems.map((item) => (
+          <a
+            href={item.href}
+            class:list={[
+              "text-sm font-medium transition-colors",
+              currentPath.startsWith(item.href)
+                ? "text-maia-blue-dark"
+                : "text-maia-navy hover:text-maia-blue",
+            ]}
+          >
+            {item.label}
+          </a>
+        ))
+      }
+    </nav>
+    <a
+      href="https://wa.me/5511981220711"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="hidden md:inline-flex items-center rounded-full bg-maia-orange px-5 py-2.5 text-sm font-semibold text-white hover:bg-maia-orange-dark transition-colors"
+    >
+      Falar no WhatsApp
+    </a>
+  </div>
+</header>

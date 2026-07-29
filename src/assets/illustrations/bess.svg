@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect width="400" height="300" fill="#eff6ff" rx="16"/>
+  <rect x="0" y="230" width="400" height="70" fill="#cbd5e1"/>
+
+  <!-- battery container 1 -->
+  <g transform="translate(90,90)">
+    <rect x="0" y="0" width="90" height="150" rx="6" fill="#0B3D62"/>
+    <rect x="8" y="10" width="74" height="130" rx="4" fill="#0b4f86"/>
+    <rect x="18" y="24" width="54" height="16" rx="2" fill="#1C75BC"/>
+    <rect x="18" y="50" width="54" height="16" rx="2" fill="#1C75BC"/>
+    <rect x="18" y="76" width="54" height="16" rx="2" fill="#1C75BC"/>
+    <rect x="18" y="102" width="54" height="16" rx="2" fill="#1C75BC"/>
+  </g>
+
+  <!-- battery container 2 -->
+  <g transform="translate(200,70)">
+    <rect x="0" y="0" width="90" height="170" rx="6" fill="#0b3d62"/>
+    <rect x="8" y="10" width="74" height="150" rx="4" fill="#0b4f86"/>
+    <rect x="18" y="24" width="54" height="16" rx="2" fill="#1C75BC"/>
+    <rect x="18" y="50" width="54" height="16" rx="2" fill="#1C75BC"/>
+    <rect x="18" y="76" width="54" height="16" rx="2" fill="#1C75BC"/>
+    <rect x="18" y="102" width="54" height="16" rx="2" fill="#1C75BC"/>
+    <rect x="18" y="128" width="54" height="16" rx="2" fill="#1C75BC"/>
+  </g>
+
+  <!-- energy bolt -->
+  <polygon points="330,110 300,170 320,170 305,220 350,155 328,155" fill="#F5A623"/>
+</svg>

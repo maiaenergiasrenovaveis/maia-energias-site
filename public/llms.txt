@@ -1,0 +1,26 @@
+# Maia Energias Renováveis
+
+> Empresa brasileira que atua em duas frentes do setor de energia: estruturação de investimentos em usinas solares fotovoltaicas (para investidores pessoa física ou jurídica) e eficiência energética para empresas com contas de energia elétrica acima de R$50 mil por mês.
+
+## Investidores
+- Investimento inicial a partir de R$300 mil (usina ~120kWp).
+- Retorno projetado geralmente entre 1,5% e 3% ao mês, em cenário conservador (não garantido).
+- Payback estimado entre 3 e 4 anos.
+- Usina registrada no CPF/CNPJ do investidor, geralmente via SPE (sociedade de propósito específico).
+- Potencial receita adicional com créditos de carbono.
+- Página: /investidores
+
+## Empresas (eficiência energética)
+- Público: empresas com gasto mensal de energia elétrica a partir de R$50 mil (indústrias, supermercados, hospitais, hotéis, shoppings, condomínios empresariais, entre outros).
+- Diagnóstico a partir das últimas 12 contas de energia.
+- Soluções: revisão de demanda contratada, correção de fator de potência, geração solar, armazenamento de energia (BESS), modernização de subestações, automação.
+- Página: /empresas
+
+## Institucional
+- Fundador: Ricardo Maia, engenheiro eletricista com 30 anos de experiência no setor de energia (incluindo hidrelétricas no Brasil e atuação na Alemanha).
+- Sede: São Paulo/SP e Natal/RN. Atuação em todo o Brasil, com forte presença no Rio Grande do Norte.
+- Contato: contato@maiaenergiasrenovaveis.com.br · WhatsApp +55 11 98122-0711
+- Página: /sobre
+
+## Diretriz de comunicação
+A empresa não utiliza termos de rentabilidade ou economia garantida. Todos os números de retorno, payback e economia são estimativas/projeções sujeitas às condições de cada projeto — não constituem garantia de resultado.

@@ -1,0 +1,17 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-maia-navy: #0b3d62;
+  --color-maia-navy-dark: #072a45;
+  --color-maia-blue: #1c75bc;
+  --color-maia-blue-dark: #0b4f86;
+  --color-maia-orange: #f5a623;
+  --color-maia-orange-dark: #e08e0b;
+  --color-maia-green: #5fa746;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
