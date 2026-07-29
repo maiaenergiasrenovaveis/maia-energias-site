@@ -3,6 +3,9 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import WhatsappCta from "../components/WhatsappCta.astro";
 import FaqAccordion from "../components/FaqAccordion.astro";
 import InstagramEmbed from "../components/InstagramEmbed.astro";
+import { Image } from "astro:assets";
+import bessIllustration from "../assets/illustrations/bess.svg";
+import subestacaoIllustration from "../assets/illustrations/subestacao.svg";
 import { businessFaq } from "../data/faq";
 
 const problems = [
@@ -89,6 +92,17 @@ const serviceSchema = {
         }
       </ul>
     </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-4 pb-16 grid gap-8 sm:grid-cols-2">
+    <figure class="rounded-xl overflow-hidden border border-slate-200">
+      <Image src={bessIllustration} alt="Sistema de armazenamento de energia (BESS)" width={400} height={300} class="w-full h-auto" />
+      <figcaption class="px-4 py-3 text-sm font-medium text-maia-navy bg-slate-50">Armazenamento de energia (BESS)</figcaption>
+    </figure>
+    <figure class="rounded-xl overflow-hidden border border-slate-200">
+      <Image src={subestacaoIllustration} alt="Subestação de alta tensão" width={400} height={300} class="w-full h-auto" />
+      <figcaption class="px-4 py-3 text-sm font-medium text-maia-navy bg-slate-50">Modernização de subestações</figcaption>
+    </figure>
   </section>
 
   <section class="bg-slate-50">

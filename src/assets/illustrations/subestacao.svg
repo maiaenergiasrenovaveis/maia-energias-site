@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect width="400" height="300" fill="#eff6ff" rx="16"/>
+  <rect x="0" y="240" width="400" height="60" fill="#cbd5e1"/>
+
+  <!-- transmission tower left -->
+  <g stroke="#0b3d62" stroke-width="4" fill="none">
+    <line x1="60" y1="240" x2="60" y2="70"/>
+    <line x1="30" y1="240" x2="60" y2="70"/>
+    <line x1="90" y1="240" x2="60" y2="70"/>
+    <line x1="40" y1="120" x2="80" y2="120"/>
+    <line x1="35" y1="160" x2="85" y2="160"/>
+    <line x1="20" y1="90" x2="100" y2="90"/>
+  </g>
+
+  <!-- transmission tower right -->
+  <g stroke="#0b3d62" stroke-width="4" fill="none">
+    <line x1="340" y1="240" x2="340" y2="70"/>
+    <line x1="310" y1="240" x2="340" y2="70"/>
+    <line x1="370" y1="240" x2="340" y2="70"/>
+    <line x1="320" y1="120" x2="360" y2="120"/>
+    <line x1="315" y1="160" x2="365" y2="160"/>
+    <line x1="300" y1="90" x2="380" y2="90"/>
+  </g>
+
+  <!-- wires -->
+  <path d="M20 90 Q 200 130 320 90" stroke="#1C75BC" stroke-width="3" fill="none"/>
+  <path d="M40 120 Q 200 155 360 120" stroke="#1C75BC" stroke-width="3" fill="none"/>
+
+  <!-- transformer bank center -->
+  <g transform="translate(160,170)">
+    <rect x="0" y="0" width="80" height="60" rx="4" fill="#F5A623"/>
+    <circle cx="20" cy="-10" r="10" fill="#0b4f86"/>
+    <circle cx="60" cy="-10" r="10" fill="#0b4f86"/>
+    <line x1="20" y1="-20" x2="20" y2="-30" stroke="#0b3d62" stroke-width="3"/>
+    <line x1="60" y1="-20" x2="60" y2="-30" stroke="#0b3d62" stroke-width="3"/>
+  </g>
+</svg>

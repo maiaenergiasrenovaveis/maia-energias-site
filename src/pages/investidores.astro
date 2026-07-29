@@ -4,6 +4,8 @@ import WhatsappCta from "../components/WhatsappCta.astro";
 import FaqAccordion from "../components/FaqAccordion.astro";
 import InstagramEmbed from "../components/InstagramEmbed.astro";
 import YoutubeEmbed from "../components/YoutubeEmbed.astro";
+import { Image } from "astro:assets";
+import usinaIllustration from "../assets/illustrations/usina-solar.svg";
 import { investorFaq } from "../data/faq";
 
 const comparison = [
@@ -46,19 +48,22 @@ const serviceSchema = {
     </div>
   </section>
 
-  <section class="mx-auto max-w-6xl px-4 py-16">
-    <h2 class="text-2xl font-bold text-maia-navy">Como funciona</h2>
-    <p class="mt-4 text-slate-600 max-w-3xl leading-relaxed">
-      Cada projeto é analisado sob as perspectivas técnica, financeira, regulatória e operacional,
-      normalmente estruturado por meio de uma SPE (sociedade de propósito específico). O investidor
-      recebe informações sobre localização, capacidade instalada, geração estimada, investimento
-      necessário, custos operacionais, estrutura societária, fluxo de caixa, TIR, VPL, payback,
-      cenário conservador e riscos com as respectivas mitigações.
-    </p>
-    <p class="mt-4 text-slate-600 max-w-3xl leading-relaxed">
-      Além da receita da geração de energia, os projetos podem apresentar oportunidades
-      complementares relacionadas a I-REC, créditos de carbono e estratégias ESG.
-    </p>
+  <section class="mx-auto max-w-6xl px-4 py-16 grid gap-10 md:grid-cols-2 items-center">
+    <div>
+      <h2 class="text-2xl font-bold text-maia-navy">Como funciona</h2>
+      <p class="mt-4 text-slate-600 leading-relaxed">
+        Cada projeto é analisado sob as perspectivas técnica, financeira, regulatória e operacional,
+        normalmente estruturado por meio de uma SPE (sociedade de propósito específico). O investidor
+        recebe informações sobre localização, capacidade instalada, geração estimada, investimento
+        necessário, custos operacionais, estrutura societária, fluxo de caixa, TIR, VPL, payback,
+        cenário conservador e riscos com as respectivas mitigações.
+      </p>
+      <p class="mt-4 text-slate-600 leading-relaxed">
+        Além da receita da geração de energia, os projetos podem apresentar oportunidades
+        complementares relacionadas a I-REC, créditos de carbono e estratégias ESG.
+      </p>
+    </div>
+    <Image src={usinaIllustration} alt="Ilustração de usina solar de investimento" width={400} height={300} class="w-full h-auto rounded-xl border border-slate-200" />
   </section>
 
   <section class="bg-slate-50">

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect width="400" height="300" fill="#eff6ff" rx="16"/>
+  <circle cx="330" cy="60" r="34" fill="#F5A623"/>
+  <g stroke="#F5A623" stroke-width="5" stroke-linecap="round">
+    <line x1="330" y1="6" x2="330" y2="20"/>
+    <line x1="384" y1="60" x2="370" y2="60"/>
+    <line x1="366" y1="24" x2="356" y2="34"/>
+  </g>
+  <path d="M0 230 L400 230 L400 300 L0 300 Z" fill="#cbd5e1"/>
+  <g>
+    <!-- rows of panels in perspective -->
+    <g transform="translate(20,150)">
+      <polygon points="0,80 340,80 300,20 40,20" fill="#0B4F86"/>
+      <polygon points="0,80 340,80 300,20 40,20" fill="none" stroke="#1C75BC" stroke-width="2"/>
+      <g stroke="#1C75BC" stroke-width="2">
+        <line x1="42" y1="24" x2="6" y2="76"/>
+        <line x1="107" y1="24" x2="90" y2="76"/>
+        <line x1="172" y1="24" x2="174" y2="76"/>
+        <line x1="237" y1="24" x2="258" y2="76"/>
+        <line x1="297" y1="24" x2="334" y2="76"/>
+        <line x1="60" y1="50" x2="286" y2="50"/>
+      </g>
+    </g>
+    <g transform="translate(20,200)">
+      <polygon points="0,80 340,80 300,20 40,20" fill="#0b3d62"/>
+      <g stroke="#1C75BC" stroke-width="2">
+        <line x1="42" y1="24" x2="6" y2="76"/>
+        <line x1="107" y1="24" x2="90" y2="76"/>
+        <line x1="172" y1="24" x2="174" y2="76"/>
+        <line x1="237" y1="24" x2="258" y2="76"/>
+        <line x1="297" y1="24" x2="334" y2="76"/>
+        <line x1="60" y1="50" x2="286" y2="50"/>
+      </g>
+    </g>
+  </g>
+</svg>
