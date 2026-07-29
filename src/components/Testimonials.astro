@@ -1,0 +1,36 @@
+---
+import { testimonials, aggregateRating } from "../data/testimonials";
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "AggregateRating",
+  ratingValue: aggregateRating.ratingValue,
+  reviewCount: aggregateRating.reviewCount,
+  itemReviewed: { "@type": "Organization", name: "Maia Energias Renováveis" },
+};
+---
+
+<div>
+  <div class="flex items-center justify-center gap-2 mb-8">
+    <div class="flex text-maia-orange" aria-hidden="true">
+      {Array.from({ length: 5 }).map(() => <span>★</span>)}
+    </div>
+    <span class="text-sm text-slate-600">
+      {aggregateRating.ratingValue.toFixed(1)} · {aggregateRating.reviewCount} avaliações no Google
+    </span>
+  </div>
+  <div class="grid gap-6 sm:grid-cols-3">
+    {
+      testimonials.map((t) => (
+        <blockquote class="rounded-xl border border-slate-200 bg-white p-6">
+          <p class="text-slate-600 leading-relaxed">"{t.text}"</p>
+          <footer class="mt-4 text-sm font-semibold text-maia-navy">
+            {t.name}
+            <span class="block font-normal text-xs text-slate-400">{t.source}</span>
+          </footer>
+        </blockquote>
+      ))
+    }
+  </div>
+  <script type="application/ld+json" set:html={JSON.stringify(schema)} />
+</div>
