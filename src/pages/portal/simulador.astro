@@ -1,0 +1,452 @@
+---
+import PortalLayout from "../../layouts/PortalLayout.astro";
+---
+
+<PortalLayout title="Simulador de ROI" active="simulador">
+  <div class="mx-auto max-w-6xl px-4 py-8">
+    <div class="mb-6">
+      <p class="text-xs font-semibold uppercase tracking-wide text-maia-orange-dark">Maia Eletropostos</p>
+      <h1 class="text-2xl font-bold text-maia-navy">Simulador de ROI — Eletropostos DC</h1>
+      <p class="text-sm text-slate-500 mt-1">Estime receita, custo operacional e retorno de investimento de um posto de recarga rápida (DC) a partir de parâmetros de operação.</p>
+    </div>
+
+    <!-- Result cards -->
+    <div id="result-cards" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6"></div>
+
+    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+      <!-- CAPEX -->
+      <div class="rounded-xl bg-white border border-slate-200 p-5">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">CAPEX</h2>
+        <div class="space-y-3 text-sm">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Potência do carregador</label>
+            <select id="in-potencia" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+              <option value="60|1|75000">60 kW (1 conector)</option>
+              <option value="80|2" selected>80 kW (2 conectores)</option>
+              <option value="120|2">120 kW (2 conectores)</option>
+              <option value="150|2">150 kW (2 conectores)</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Equipamento (R$)</label>
+              <input id="in-equipamento" type="number" value="95000" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Imposto de compra (%)</label>
+              <input id="in-imposto-compra" type="number" value="0" step="0.1" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Instalação elétrica (R$)</label>
+              <input id="in-instalacao" type="number" value="15000" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Obra civil (R$)</label>
+              <input id="in-obra" type="number" value="10000" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+          </div>
+          <div class="flex justify-between text-sm bg-slate-50 rounded-lg px-3 py-2">
+            <span class="text-slate-500">Investimento no eletroposto</span>
+            <span id="out-invest-eletroposto" class="font-semibold text-maia-navy"></span>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Usina solar (R$) <span class="font-normal text-slate-400">— opcional</span></label>
+            <input id="in-usina" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+          </div>
+          <div class="flex justify-between text-sm bg-slate-50 rounded-lg px-3 py-2 font-semibold">
+            <span class="text-slate-600">Investimento total (CAPEX)</span>
+            <span id="out-capex-total" class="text-maia-navy"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Operação -->
+      <div class="rounded-xl bg-white border border-slate-200 p-5">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Operação</h2>
+        <div class="space-y-3 text-sm">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Ocupação média total (horas/dia)</label>
+            <input id="in-horas" type="number" value="8" step="0.5" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            <p class="text-[11px] text-slate-400 mt-1">Soma das horas de carregamento em todos os conectores do posto.</p>
+          </div>
+          <dl id="operacao-stats" class="grid grid-cols-2 gap-2 text-xs bg-slate-50 rounded-lg p-3"></dl>
+          <div>
+            <label class="flex justify-between text-xs font-semibold text-slate-500 mb-1">
+              <span>Preço cobrado</span><span id="out-preco">R$ 0,00/kWh</span>
+            </label>
+            <input id="in-preco" type="range" min="0.99" max="2.99" step="0.01" value="1.99" class="w-full accent-maia-orange" />
+            <p class="text-[11px] text-slate-400 mt-1">Faixa praticada em SP: R$1,79–2,49/kWh.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payback chart -->
+    <div class="rounded-xl bg-white border border-slate-200 p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3">Payback — Fluxo de caixa acumulado</h2>
+        <span id="payback-badge" class="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700"></span>
+      </div>
+      <canvas id="paybackChart" height="90"></canvas>
+    </div>
+
+    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+      <!-- Custos operacionais -->
+      <div class="rounded-xl bg-white border border-slate-200 p-5">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Custos Operacionais</h2>
+        <div class="space-y-3 text-sm">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Custo da energia (R$/kWh)</label>
+              <input id="in-custo-energia" type="number" value="0.75" step="0.01" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Manutenção (R$/mês)</label>
+              <input id="in-manutencao" type="number" value="150" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Deprec. eletroposto (%a.a.)</label>
+              <input id="in-dep-eletroposto" type="number" value="6.67" step="0.01" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Deprec. usina solar (%a.a.)</label>
+              <input id="in-dep-usina" type="number" value="4" step="0.1" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+          </div>
+          <div>
+            <label class="flex justify-between text-xs font-semibold text-slate-500 mb-1"><span>Taxa da plataforma</span><span id="out-taxa-plataforma">5%</span></label>
+            <input id="in-taxa-plataforma" type="range" min="0" max="20" step="0.5" value="5" class="w-full accent-maia-orange" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Mensalidade plataforma (R$)</label>
+              <input id="in-mensalidade" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Impostos (%)</label>
+              <input id="in-impostos" type="number" value="11.33" step="0.01" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Despesas fixas + Financeiro -->
+      <div class="space-y-6">
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Despesas Fixas Mensais</h2>
+          <div class="grid grid-cols-3 gap-3 text-sm">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Aluguel vagas (R$)</label>
+              <input id="in-aluguel-vagas" type="number" value="1000" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Aluguel telhado (R$)</label>
+              <input id="in-aluguel-telhado" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Internet (R$)</label>
+              <input id="in-internet" type="number" value="100" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Financeiro</h2>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Horizonte (anos)</label>
+              <input id="in-horizonte" type="number" value="15" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">TMA (%a.a.)</label>
+              <input id="in-tma" type="number" value="15" step="0.1" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Reajuste energia (%a.a.)</label>
+              <input id="in-reajuste-energia" type="number" value="8" step="0.1" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">IPCA (%a.a.)</label>
+              <input id="in-ipca" type="number" value="4.5" step="0.1" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+          </div>
+          <label class="flex items-center gap-2 mt-4 text-sm">
+            <input id="in-financiamento" type="checkbox" class="h-4 w-4" />
+            <span class="font-semibold text-slate-600">Financiamento ativo</span>
+          </label>
+          <div id="financiamento-fields" class="grid grid-cols-2 gap-3 mt-3 text-sm hidden">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Taxa (%a.m.)</label>
+              <input id="in-taxa-fin" type="number" value="2.0" step="0.1" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Carência (meses)</label>
+              <input id="in-carencia" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Parcelas (meses)</label>
+              <input id="in-parcelas" type="number" value="36" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+            </div>
+            <div class="col-span-2 flex justify-between text-sm bg-slate-50 rounded-lg px-3 py-2">
+              <span class="text-slate-500">Parcela mensal</span>
+              <span id="out-parcela" class="font-semibold text-maia-navy"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DRE -->
+    <div class="rounded-xl bg-white border border-slate-200 p-5 mb-6">
+      <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">DRE Mensal — Demonstrativo de Resultado <span class="font-normal normal-case text-slate-400">(mês 1)</span></h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <tbody id="dre-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="rounded-xl bg-slate-100 p-5 text-xs text-slate-500 space-y-1.5">
+      <p class="font-semibold text-slate-600 uppercase tracking-wide text-[11px] mb-2">Premissas do modelo</p>
+      <p>Receita mensal = horas de uso/dia × potência do carregador (kW) × 30 dias × preço cobrado.</p>
+      <p>Custo operacional = energia comprada + manutenção + mensalidade e taxa da plataforma (sobre a receita) + impostos (sobre a receita) + depreciação linear do eletroposto e da usina solar (cada um com sua própria taxa a.a.).</p>
+      <p>Despesas fixas somam aluguel de vagas, aluguel de telhado (usina) e internet.</p>
+      <p>A partir do 2º ano, preço cobrado e custo de energia reajustam pela taxa de "Reajuste de energia"; demais custos fixos reajustam pelo IPCA.</p>
+      <p>TIR e VPL usam o fluxo de caixa mensal real ao longo do horizonte, com TMA como taxa de desconto do VPL e referência de comparação para a TIR. Com financiamento ativo, o CAPEX não é debitado no mês zero (parcelas substituem o desembolso à vista).</p>
+      <p class="text-slate-400">Uso interno para avaliação preliminar de investimento — não substitui análise financeira detalhada.</p>
+    </div>
+  </div>
+</PortalLayout>
+
+<script is:inline src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+<script is:inline>
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const brl = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+    const brl2 = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
+    const pct = (n) => (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%";
+
+    $("in-potencia").addEventListener("change", (e) => {
+      const [kw] = e.target.value.split("|");
+      const suggested = { "60": 75000, "80": 95000, "120": 135000, "150": 170000 }[kw] || 95000;
+      $("in-equipamento").value = suggested;
+      compute();
+    });
+    $("in-preco").addEventListener("input", () => { $("out-preco").textContent = "R$ " + Number($("in-preco").value).toFixed(2) + "/kWh"; compute(); });
+    $("in-taxa-plataforma").addEventListener("input", () => { $("out-taxa-plataforma").textContent = $("in-taxa-plataforma").value + "%"; compute(); });
+    $("in-financiamento").addEventListener("change", () => {
+      $("financiamento-fields").classList.toggle("hidden", !$("in-financiamento").checked);
+      compute();
+    });
+    document.querySelectorAll("input, select").forEach((el) => {
+      if (["in-preco", "in-taxa-plataforma", "in-potencia", "in-financiamento"].includes(el.id)) return;
+      el.addEventListener("input", compute);
+    });
+
+    let paybackChart, monthlyChart;
+
+    function potenciaKw() {
+      return Number($("in-potencia").value.split("|")[0]);
+    }
+
+    // Price table monthly payment (with optional interest-only grace period)
+    function calcParcela(principal, monthlyRate, nParcelas) {
+      if (monthlyRate === 0) return principal / nParcelas;
+      const i = monthlyRate;
+      return (principal * i) / (1 - Math.pow(1 + i, -nParcelas));
+    }
+
+    function irr(cashflows) {
+      // Bisection search for monthly IRR
+      let lo = -0.5, hi = 1.0;
+      const npvAt = (r) => cashflows.reduce((acc, cf, t) => acc + cf / Math.pow(1 + r, t), 0);
+      if (npvAt(lo) * npvAt(hi) > 0) return null;
+      for (let iter = 0; iter < 100; iter++) {
+        const mid = (lo + hi) / 2;
+        const v = npvAt(mid);
+        if (Math.abs(v) < 1e-6) return mid;
+        if (npvAt(lo) * v < 0) hi = mid; else lo = mid;
+      }
+      return (lo + hi) / 2;
+    }
+
+    function compute() {
+      $("out-preco").textContent = "R$ " + Number($("in-preco").value).toFixed(2) + "/kWh";
+      $("out-taxa-plataforma").textContent = $("in-taxa-plataforma").value + "%";
+      const potKw = potenciaKw();
+      const equipamento = Number($("in-equipamento").value) || 0;
+      const impostoCompra = Number($("in-imposto-compra").value) || 0;
+      const instalacao = Number($("in-instalacao").value) || 0;
+      const obra = Number($("in-obra").value) || 0;
+      const usina = Number($("in-usina").value) || 0;
+      const investEletroposto = equipamento * (1 + impostoCompra / 100) + instalacao + obra;
+      const capexTotal = investEletroposto + usina;
+      $("out-invest-eletroposto").textContent = brl(investEletroposto);
+      $("out-capex-total").textContent = brl(capexTotal);
+
+      const horasDia = Number($("in-horas").value) || 0;
+      const precoKwh = Number($("in-preco").value) || 0;
+      const kwhDia = horasDia * potKw;
+      const kwhMes = kwhDia * 30;
+      $("operacao-stats").innerHTML = `
+        <div class="flex justify-between"><dt class="text-slate-500">Consumo (kWh/dia)</dt><dd class="font-semibold">${kwhDia.toFixed(0)}</dd></div>
+        <div class="flex justify-between"><dt class="text-slate-500">Consumo (kWh/mês)</dt><dd class="font-semibold">${kwhMes.toFixed(0)}</dd></div>
+        <div class="flex justify-between"><dt class="text-slate-500">Capacidade diária</dt><dd class="font-semibold">${(potKw >= 80 ? 48 : 24)}h</dd></div>
+        <div class="flex justify-between"><dt class="text-slate-500">Ocupação média</dt><dd class="font-semibold">${pct((horasDia / (potKw >= 80 ? 48 : 24)) * 100)}</dd></div>
+      `;
+
+      const custoEnergiaKwh = Number($("in-custo-energia").value) || 0;
+      const manutencao = Number($("in-manutencao").value) || 0;
+      const depEletropostoAA = Number($("in-dep-eletroposto").value) || 0;
+      const depUsinaAA = Number($("in-dep-usina").value) || 0;
+      const taxaPlataforma = Number($("in-taxa-plataforma").value) || 0;
+      const mensalidade = Number($("in-mensalidade").value) || 0;
+      const impostosPct = Number($("in-impostos").value) || 0;
+      const aluguelVagas = Number($("in-aluguel-vagas").value) || 0;
+      const aluguelTelhado = Number($("in-aluguel-telhado").value) || 0;
+      const internet = Number($("in-internet").value) || 0;
+
+      const horizonteAnos = Math.max(1, Number($("in-horizonte").value) || 15);
+      const tmaAA = Number($("in-tma").value) || 0;
+      const reajusteEnergiaAA = Number($("in-reajuste-energia").value) || 0;
+      const ipcaAA = Number($("in-ipca").value) || 0;
+
+      const financiado = $("in-financiamento").checked;
+      const taxaFinAM = Number($("in-taxa-fin").value) || 0;
+      const carencia = Number($("in-carencia").value) || 0;
+      const parcelas = Math.max(1, Number($("in-parcelas").value) || 36);
+      let parcelaMensal = 0;
+      if (financiado) {
+        parcelaMensal = calcParcela(capexTotal, taxaFinAM / 100, Math.max(1, parcelas - carencia));
+        $("out-parcela").textContent = brl2(parcelaMensal) + "/mês";
+      }
+
+      // Month-1 DRE
+      function dreForMonth(precoKwhM, custoEnergiaM, fixedMult) {
+        const receita = kwhMes * precoKwhM;
+        const impostos = receita * (impostosPct / 100);
+        const taxaPlat = receita * (taxaPlataforma / 100);
+        const receitaLiquida = receita - impostos - taxaPlat;
+        const custoEnergiaTotal = kwhMes * custoEnergiaM;
+        const lucroBruto = receitaLiquida - custoEnergiaTotal - manutencao * fixedMult - mensalidade * fixedMult;
+        const despesasFixas = (aluguelVagas + aluguelTelhado + internet) * fixedMult;
+        const resultadoAntesDepFin = lucroBruto - despesasFixas;
+        const depEletroposto = (investEletroposto * (depEletropostoAA / 100)) / 12;
+        const depUsina = (usina * (depUsinaAA / 100)) / 12;
+        const lucroLiquido = resultadoAntesDepFin - depEletroposto - depUsina;
+        return { receita, impostos, taxaPlat, receitaLiquida, custoEnergiaTotal, manutencaoM: manutencao * fixedMult, mensalidadeM: mensalidade * fixedMult, lucroBruto, aluguelVagasM: aluguelVagas * fixedMult, aluguelTelhadoM: aluguelTelhado * fixedMult, internetM: internet * fixedMult, resultadoAntesDepFin, depEletroposto, depUsina, lucroLiquido };
+      }
+
+      const m1 = dreForMonth(precoKwh, custoEnergiaKwh, 1);
+
+      // Result cards
+      const custoOperacionalMensal = m1.custoEnergiaTotal + m1.manutencaoM + m1.mensalidadeM + m1.impostos + m1.taxaPlat + (aluguelVagas + aluguelTelhado + internet);
+      $("result-cards").innerHTML = `
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Receita mensal</p>
+          <p class="mt-1 text-2xl font-bold text-maia-navy">${brl(m1.receita)}</p>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Custo operacional</p>
+          <p class="mt-1 text-2xl font-bold text-maia-navy">${brl(custoOperacionalMensal)}</p>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Lucro líquido mensal</p>
+          <p class="mt-1 text-2xl font-bold ${m1.lucroLiquido >= 0 ? "text-maia-green" : "text-red-600"}">${brl(m1.lucroLiquido - (financiado ? parcelaMensal : 0))}</p>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Taxa de retorno mensal</p>
+          <p class="mt-1 text-2xl font-bold text-maia-navy">${pct((m1.lucroLiquido / (capexTotal || 1)) * 100)}</p>
+        </div>
+      `;
+
+      // DRE table
+      $("dre-tbody").innerHTML = `
+        <tr class="border-b border-slate-100"><td class="py-1.5 font-semibold text-maia-navy">Receita bruta (energia vendida)</td><td class="py-1.5 text-right font-semibold">${brl2(m1.receita)}</td></tr>
+        <tr class="border-b border-slate-100 text-red-600"><td class="py-1.5 pl-4">Impostos (${pct(impostosPct)})</td><td class="py-1.5 text-right">−${brl2(m1.impostos)}</td></tr>
+        <tr class="border-b border-slate-100 text-red-600"><td class="py-1.5 pl-4">Taxa da plataforma (${pct(taxaPlataforma)})</td><td class="py-1.5 text-right">−${brl2(m1.taxaPlat)}</td></tr>
+        <tr class="border-b border-slate-100"><td class="py-1.5 font-semibold">= Receita líquida</td><td class="py-1.5 text-right font-semibold">${brl2(m1.receitaLiquida)}</td></tr>
+        <tr class="border-b border-slate-100 text-red-600"><td class="py-1.5 pl-4">Energia elétrica (custo)</td><td class="py-1.5 text-right">−${brl2(m1.custoEnergiaTotal)}</td></tr>
+        <tr class="border-b border-slate-100 text-red-600"><td class="py-1.5 pl-4">Manutenção</td><td class="py-1.5 text-right">−${brl2(m1.manutencaoM)}</td></tr>
+        <tr class="border-b border-slate-100 text-red-600"><td class="py-1.5 pl-4">Mensalidade da plataforma</td><td class="py-1.5 text-right">−${brl2(m1.mensalidadeM)}</td></tr>
+        <tr class="border-b border-slate-100"><td class="py-1.5 font-semibold">= Lucro bruto</td><td class="py-1.5 text-right font-semibold">${brl2(m1.lucroBruto)}</td></tr>
+        <tr class="border-b border-slate-100 text-red-600"><td class="py-1.5 pl-4">Aluguel de vagas</td><td class="py-1.5 text-right">−${brl2(m1.aluguelVagasM)}</td></tr>
+        <tr class="border-b border-slate-100 text-red-600"><td class="py-1.5 pl-4">Aluguel de telhado (usina)</td><td class="py-1.5 text-right">−${brl2(m1.aluguelTelhadoM)}</td></tr>
+        <tr class="border-b border-slate-100 text-red-600"><td class="py-1.5 pl-4">Internet</td><td class="py-1.5 text-right">−${brl2(m1.internetM)}</td></tr>
+        <tr class="border-b border-slate-100"><td class="py-1.5 font-semibold">= Resultado antes de depreciação e financiamento</td><td class="py-1.5 text-right font-semibold">${brl2(m1.resultadoAntesDepFin)}</td></tr>
+        <tr class="border-b border-slate-100 text-red-600"><td class="py-1.5 pl-4">Depreciação do eletroposto</td><td class="py-1.5 text-right">−${brl2(m1.depEletroposto)}</td></tr>
+        <tr class="border-b border-slate-100 text-red-600"><td class="py-1.5 pl-4">Depreciação da usina solar</td><td class="py-1.5 text-right">−${brl2(m1.depUsina)}</td></tr>
+        ${financiado ? `<tr class="border-b border-slate-100 text-red-600"><td class="py-1.5 pl-4">Parcela do financiamento</td><td class="py-1.5 text-right">−${brl2(parcelaMensal)}</td></tr>` : ""}
+        <tr><td class="py-2 font-bold text-maia-navy">= LUCRO LÍQUIDO MENSAL</td><td class="py-2 text-right font-bold ${m1.lucroLiquido - (financiado ? parcelaMensal : 0) >= 0 ? "text-maia-green" : "text-red-600"}">${brl2(m1.lucroLiquido - (financiado ? parcelaMensal : 0))}</td></tr>
+      `;
+
+      // Monthly cash flow projection over horizon
+      const nMonths = horizonteAnos * 12;
+      const cashflows = [financiado ? 0 : -capexTotal];
+      const monthlyRevenue = [];
+      const monthlyCost = [];
+      let cumulative = financiado ? 0 : -capexTotal;
+      const cumSeries = [cumulative];
+      for (let mth = 1; mth <= nMonths; mth++) {
+        const yearIdx = Math.floor((mth - 1) / 12);
+        const priceGrowth = Math.pow(1 + reajusteEnergiaAA / 100, yearIdx);
+        const ipcaGrowth = Math.pow(1 + ipcaAA / 100, yearIdx);
+        const dre = dreForMonth(precoKwh * priceGrowth, custoEnergiaKwh * priceGrowth, ipcaGrowth);
+        let netCf = dre.lucroLiquido;
+        if (financiado && mth <= parcelas) netCf -= parcelaMensal;
+        cumulative += netCf;
+        cashflows.push(netCf);
+        cumSeries.push(cumulative);
+        monthlyRevenue.push(dre.receita);
+        monthlyCost.push(dre.receita - dre.lucroLiquido);
+      }
+
+      // Payback
+      let paybackMonth = null;
+      for (let t = 1; t < cumSeries.length; t++) {
+        if (cumSeries[t] >= 0) { paybackMonth = t; break; }
+      }
+      $("payback-badge").textContent = paybackMonth ? `Payback em ${paybackMonth} meses` : "Payback não atingido no horizonte";
+      $("payback-badge").className = "text-xs font-semibold px-3 py-1 rounded-full " + (paybackMonth ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600");
+
+      const vpl = cashflows.reduce((acc, cf, t) => acc + cf / Math.pow(1 + tmaAA / 100 / 12, t), 0);
+      const tirMensal = irr(cashflows);
+      const tirAA = tirMensal !== null ? (Math.pow(1 + tirMensal, 12) - 1) * 100 : null;
+
+      const paybackCard = document.createElement("div");
+      // Add Payback / TIR / VPL as extra cards appended below the first 4
+      $("result-cards").innerHTML += `
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Payback</p>
+          <p class="mt-1 text-2xl font-bold text-maia-navy">${paybackMonth ? paybackMonth + " meses" : "—"}</p>
+          <p class="text-xs text-slate-400 mt-1">${paybackMonth ? (paybackMonth / 12).toFixed(1) + " anos" : ""}</p>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">TIR (a.a.)</p>
+          <p class="mt-1 text-2xl font-bold text-maia-navy">${tirAA !== null ? pct(tirAA) : "—"}</p>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">VPL</p>
+          <p class="mt-1 text-2xl font-bold ${vpl >= 0 ? "text-maia-green" : "text-red-600"}">${brl(vpl)}</p>
+        </div>
+      `;
+
+      // Payback chart (yearly points for readability)
+      const yearLabels = ["Mês 0"];
+      const yearData = [cumSeries[0]];
+      for (let y = 1; y <= horizonteAnos; y++) {
+        yearLabels.push("Ano " + y);
+        yearData.push(cumSeries[Math.min(y * 12, cumSeries.length - 1)]);
+      }
+      if (paybackChart) paybackChart.destroy();
+      paybackChart = new Chart($("paybackChart"), {
+        type: "line",
+        data: { labels: yearLabels, datasets: [{ label: "Fluxo de caixa acumulado", data: yearData, borderColor: "#5fa746", backgroundColor: "rgba(95,167,70,0.12)", fill: true, tension: 0.3 }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: (v) => brl(v) } } } },
+      });
+    }
+
+    compute();
+  })();
+</script>

@@ -1,0 +1,50 @@
+---
+import PortalLayout from "../../layouts/PortalLayout.astro";
+
+const modules = [
+  {
+    icon: "📊",
+    title: "Monitor de Eletropostos",
+    href: "/portal/monitor",
+    description: "Cobertura, ranking por região e análise de performance dos postos de carregamento em SP.",
+  },
+  {
+    icon: "📍",
+    title: "Locais de Eletropostos",
+    href: "/portal/locais",
+    description: "Gerencie pontos prospectados, avalie scores e acompanhe o status de negociação.",
+  },
+  {
+    icon: "💰",
+    title: "Simulador ROI",
+    href: "/portal/simulador",
+    description: "Calcule o retorno sobre investimento de um eletroposto com base no perfil do local.",
+  },
+];
+---
+
+<PortalLayout title="Portal" active="">
+  <div class="mx-auto max-w-5xl px-4 py-16">
+    <h1 class="text-2xl font-bold text-maia-navy">
+      Olá, <span class="text-maia-orange-dark">admin</span>
+    </h1>
+    <p class="mt-1 text-slate-500">Escolha um módulo para acessar.</p>
+
+    <div class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        modules.map((m) => (
+          <a href={m.href} class="group rounded-2xl bg-white border border-slate-200 p-6 shadow-sm hover:shadow-md hover:border-maia-blue/40 transition-all">
+            <div class="h-11 w-11 rounded-xl bg-maia-navy/5 flex items-center justify-center text-2xl mb-4">
+              {m.icon}
+            </div>
+            <h2 class="font-bold text-maia-navy">{m.title}</h2>
+            <p class="mt-2 text-sm text-slate-500 leading-relaxed">{m.description}</p>
+            <span class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-maia-blue-dark group-hover:gap-2 transition-all">
+              Acessar →
+            </span>
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</PortalLayout>
