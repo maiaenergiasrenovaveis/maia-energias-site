@@ -16,7 +16,7 @@ const currentPath = Astro.url.pathname;
 <header class="bg-white border-b border-slate-100 sticky top-0 z-50">
   <div class="mx-auto max-w-6xl px-4 flex items-center justify-between h-20">
     <a href="/" class="flex items-center gap-2.5">
-      <Image src={logoIcon} alt="" height={44} class="h-11 w-auto" />
+      <Image src={logoIcon} alt="" height={44} densities={[1, 2]} class="h-11 w-auto" />
       <span class="leading-tight">
         <span class="block text-lg font-bold text-maia-navy">MAIA</span>
         <span class="block text-[10px] font-semibold uppercase tracking-wide text-maia-navy/70">Energias Renováveis</span>
@@ -43,7 +43,7 @@ const currentPath = Astro.url.pathname;
       href="https://wa.me/5511981220711"
       target="_blank"
       rel="noopener noreferrer"
-      class="hidden md:inline-flex items-center rounded-full bg-maia-orange px-5 py-2.5 text-sm font-semibold text-white hover:bg-maia-orange-dark transition-colors"
+      class="hidden md:inline-flex items-center rounded-full bg-maia-orange px-5 py-2.5 text-sm font-semibold text-maia-navy hover:bg-maia-navy hover:text-white transition-colors"
     >
       Falar no WhatsApp
     </a>
@@ -82,7 +82,7 @@ const currentPath = Astro.url.pathname;
         href="https://wa.me/5511981220711"
         target="_blank"
         rel="noopener noreferrer"
-        class="mt-2 inline-flex items-center justify-center rounded-full bg-maia-orange px-5 py-2.5 text-sm font-semibold text-white"
+        class="mt-2 inline-flex items-center justify-center rounded-full bg-maia-orange px-5 py-2.5 text-sm font-semibold text-maia-navy"
       >
         Falar no WhatsApp
       </a>
