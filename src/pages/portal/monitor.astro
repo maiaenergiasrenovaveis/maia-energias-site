@@ -141,6 +141,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <p class="font-semibold text-slate-600 uppercase tracking-wide text-[11px] mb-2">Metodologia & Fontes</p>
         <p><strong>Fonte:</strong> endpoint público usado pelo mapa de eletropostos da Tupi (não documentado oficialmente; encontrado inspecionando o site público deles). Sem chave de API, sem contrato firmado — pode mudar ou parar de funcionar sem aviso.</p>
         <p><strong>Filtro geográfico:</strong> estações dentro de uma caixa delimitadora aproximada do estado de SP (pode incluir alguns pontos de fronteira com estados vizinhos).</p>
+        <p><strong>"Sem dado":</strong> nem toda estação listada no mapa da Tupi tem telemetria de conector — cerca de 70% delas aparecem só como ponto no mapa (provavelmente cadastros não conectados ao monitoramento ao vivo deles), sem status/preço/receita possíveis de calcular. A lista de estações prioriza mostrar primeiro as que têm telemetria real.</p>
         <p><strong>Status:</strong> refletem o último estado sincronizado de cada conector (protocolo OCPP): Available, Charging, Preparing, Finishing, Reserved = operacional (sem falha); Faulted, Unavailable, SuspendedEV = com problema.</p>
         <p><strong>Operacional ≠ em uso:</strong> "operacional" inclui tanto Available (disponível, ocioso, sem ninguém carregando) quanto Charging (carregando de verdade). "Em uso" conta só o estado Charging — um posto pode estar 100% operacional (sem nenhuma falha) e 0% em uso.</p>
         <p><strong>Atualização de status:</strong> um job agendado (a cada 5 min) salva um retrato do status de cada conector em um banco próprio, para calcular disponibilidade e uso ao longo do tempo (não só o instante atual).</p>
@@ -255,8 +256,15 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
     }
 
     function renderStationsTable() {
-      const list = [...filteredStations()].sort((a, b) => (b.estimatedRevenue30d || -1) - (a.estimatedRevenue30d || -1)).slice(0, 300);
-      document.getElementById("stations-count").textContent = `${filteredStations().length.toLocaleString("pt-BR")} estação(ões)${filteredStations().length > 300 ? " — mostrando 300" : ""}`;
+      const list = [...filteredStations()].sort((a, b) => {
+        const aHasData = a.connectors.length > 0 ? 1 : 0;
+        const bHasData = b.connectors.length > 0 ? 1 : 0;
+        if (aHasData !== bHasData) return bHasData - aHasData;
+        return (b.estimatedRevenue30d || 0) - (a.estimatedRevenue30d || 0);
+      }).slice(0, 300);
+      const withTelemetry = filteredStations().filter((s) => s.connectors.length > 0).length;
+      document.getElementById("stations-count").textContent =
+        `${filteredStations().length.toLocaleString("pt-BR")} estação(ões)${filteredStations().length > 300 ? " — mostrando 300" : ""} · ${withTelemetry.toLocaleString("pt-BR")} com telemetria ao vivo`;
       document.getElementById("stations-tbody").innerHTML = list.map((s) => {
         const status = stationStatus(s);
         const badge = status === "ok"
