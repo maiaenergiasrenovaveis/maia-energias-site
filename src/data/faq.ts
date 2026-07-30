@@ -62,6 +62,11 @@ export const investorFaq: FaqItem[] = [
     answer:
       "Sim. A Maia pode estruturar o projeto de créditos de carbono para a usina, com potencial de gerar uma receita líquida anual estimada entre R$10.000 e R$15.000 por usina, ao longo de um período de até 10 anos — valores sujeitos às condições do mercado de carbono.",
   },
+  {
+    question: "É seguro investir em energia solar?",
+    answer:
+      "Como qualquer investimento em ativo real, envolve riscos — variação na geração de energia, mudanças regulatórias e condições de mercado. A Maia reduz esses riscos com análise técnica, financeira e regulatória prévia, estrutura societária dedicada (SPE) e acompanhamento contínuo da operação, mas não existe garantia de retorno: os indicadores apresentados são projeções em cenário conservador.",
+  },
 ];
 
 // Rascunho inicial para o público de eficiência energética — revisar com o
@@ -121,5 +126,15 @@ export const businessFaq: FaqItem[] = [
     question: "Vale a pena instalar banco de capacitores na minha empresa?",
     answer:
       "Depende do fator de potência atual da instalação. Quando ele fica abaixo do mínimo exigido pela distribuidora, a empresa paga uma cobrança adicional na conta — nesses casos, o banco de capacitores costuma ter payback rápido. A Maia avalia isso dentro do diagnóstico energético antes de recomendar a instalação.",
+  },
+  {
+    question: "O que é geração distribuída de energia?",
+    answer:
+      "É o modelo regulamentado pela ANEEL em que a energia é gerada perto de onde é consumida (por exemplo, uma usina solar) e os créditos gerados abatem o consumo da unidade, podendo ser compartilhados entre unidades do mesmo titular ou consórcio. É a base regulatória que viabiliza tanto usinas de investimento quanto soluções de eficiência energética para empresas.",
+  },
+  {
+    question: "Quanto custa migrar para o mercado livre de energia?",
+    answer:
+      "Não há um valor fixo — depende do perfil de consumo, da demanda contratada e das condições comerciais negociadas com o fornecedor. A Maia avalia se a migração faz sentido para o perfil da empresa dentro do diagnóstico energético, comparando o cenário atual no mercado regulado com as condições estimadas no mercado livre.",
   },
 ];
