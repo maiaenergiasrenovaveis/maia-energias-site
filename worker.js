@@ -2,6 +2,7 @@ const SP_BOUNDS = { latMin: -25.36, latMax: -19.78, lngMin: -53.11, lngMax: -44.
 const TUPI_STATIONS_URL = "https://api.tupinambaenergia.com.br/stationsShortVersion?plugTypes=&fast=false&searchText=";
 const TUPI_STATION_DETAIL_URL = (id) => `https://api.tupinambaenergia.com.br/station/${id}`;
 const OPERATIONAL_STATES = new Set(["Available", "Charging", "Preparing", "Finishing", "Reserved"]);
+const IN_USE_STATES = new Set(["Charging"]);
 const PRICE_BATCH_SIZE = 20;
 const UPTIME_WINDOW_MS = 24 * 3600 * 1000;
 const FETCH_HEADERS = { "User-Agent": "MaiaEnergiasRenovaveis-Portal/1.0 (contato@maiaenergiasrenovaveis.com.br)" };
@@ -153,6 +154,7 @@ async function buildEletropostosPayload(env) {
     env.DB.prepare(
       `SELECT station_id, connector_index,
          AVG(CASE WHEN state IN ('Available','Charging','Preparing','Finishing','Reserved') THEN 1.0 ELSE 0.0 END) AS uptime_pct,
+         AVG(CASE WHEN state = 'Charging' THEN 1.0 ELSE 0.0 END) AS utilization_pct,
          COUNT(*) AS samples
        FROM status_snapshots WHERE captured_at > ? GROUP BY station_id, connector_index`
     ).bind(since).all(),
@@ -167,7 +169,8 @@ async function buildEletropostosPayload(env) {
   const latestByKey = new Map();
   for (const l of latestRes.results) latestByKey.set(l.station_id + ":" + l.connector_index, l.state);
   const uptimeByKey = new Map();
-  for (const u of uptimeRes.results) uptimeByKey.set(u.station_id + ":" + u.connector_index, { pct: u.uptime_pct, samples: u.samples });
+  for (const u of uptimeRes.results)
+    uptimeByKey.set(u.station_id + ":" + u.connector_index, { pct: u.uptime_pct, utilization: u.utilization_pct, samples: u.samples });
   const pricingByStation = new Map();
   for (const p of pricingRes.results) pricingByStation.set(p.station_id, p);
 
@@ -181,17 +184,21 @@ async function buildEletropostosPayload(env) {
         power: c.power,
         current: c.current,
         state: latest || null,
+        inUseNow: latest ? IN_USE_STATES.has(latest) : null,
         uptimePct24h: uptime ? Math.round(uptime.pct * 1000) / 1000 : null,
+        utilizationPct24h: uptime ? Math.round(uptime.utilization * 1000) / 1000 : null,
       };
     });
     const pricing = pricingByStation.get(s.station_id) || null;
 
+    // Receita estimada usa % de tempo REALMENTE carregando ("Charging"), não % de tempo
+    // apenas disponível/sem falha — disponível ocioso não gera receita.
     let estimatedRevenue30d = null;
     if (pricing && pricing.price_per_kwh && connectors.length) {
       let sum = 0;
       for (const c of connectors) {
-        if (c.power && c.uptimePct24h !== null) {
-          sum += c.uptimePct24h * 24 * (c.power || 0) * pricing.price_per_kwh * 30;
+        if (c.power && c.utilizationPct24h !== null) {
+          sum += c.utilizationPct24h * 24 * (c.power || 0) * pricing.price_per_kwh * 30;
         }
       }
       estimatedRevenue30d = sum > 0 ? Math.round(sum) : null;

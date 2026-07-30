@@ -38,7 +38,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       </div>
 
       <!-- KPIs -->
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-2">
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Estações em SP</p>
           <p id="kpi-stations" class="mt-1 text-3xl font-bold text-maia-navy"></p>
@@ -50,12 +50,19 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Operacionais agora</p>
           <p id="kpi-operational" class="mt-1 text-3xl font-bold text-maia-green"></p>
+          <p class="text-[11px] text-slate-400 mt-1">sem falha — inclui ociosos</p>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Em uso agora</p>
+          <p id="kpi-in-use" class="mt-1 text-3xl font-bold text-maia-blue"></p>
+          <p class="text-[11px] text-slate-400 mt-1">carregando neste momento</p>
         </div>
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Com problema agora</p>
           <p id="kpi-problem" class="mt-1 text-3xl font-bold text-red-600"></p>
         </div>
       </div>
+      <p class="text-xs text-slate-400 mb-6">"Operacional" = sem falha detectada (pode estar ocioso/disponível ou carregando). "Em uso" = carregando de verdade neste momento — os dois números são diferentes de propósito.</p>
 
       <div class="rounded-xl bg-white border border-slate-200 p-4 mb-8 flex items-center justify-between flex-wrap gap-2">
         <div>
@@ -119,6 +126,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
                 <th class="py-2 pr-2">Rede</th>
                 <th class="py-2 pr-2">Conectores</th>
                 <th class="py-2 pr-2">Status</th>
+                <th class="py-2 pr-2">Uso (24h)</th>
                 <th class="py-2 pr-2">Preço</th>
                 <th class="py-2 pr-2 text-right">Receita est. (30d)</th>
               </tr>
@@ -133,9 +141,10 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <p class="font-semibold text-slate-600 uppercase tracking-wide text-[11px] mb-2">Metodologia & Fontes</p>
         <p><strong>Fonte:</strong> endpoint público usado pelo mapa de eletropostos da Tupi (não documentado oficialmente; encontrado inspecionando o site público deles). Sem chave de API, sem contrato firmado — pode mudar ou parar de funcionar sem aviso.</p>
         <p><strong>Filtro geográfico:</strong> estações dentro de uma caixa delimitadora aproximada do estado de SP (pode incluir alguns pontos de fronteira com estados vizinhos).</p>
-        <p><strong>Status:</strong> refletem o último estado sincronizado de cada conector (protocolo OCPP): Available, Charging, Preparing, Finishing, Reserved = operacional; Faulted, Unavailable, SuspendedEV = com problema.</p>
-        <p><strong>Atualização de status:</strong> um job agendado (a cada 5 min) salva um retrato do status de cada conector em um banco próprio, para calcular disponibilidade ao longo do tempo.</p>
-        <p><strong>Preço e receita estimada:</strong> o preço por kWh vem do endpoint de detalhe de cada posto, coletado aos poucos (~20 postos a cada 5 min, cobertura completa em algumas horas) para não sobrecarregar o servidor da Tupi. A receita estimada de 30 dias = % de tempo operacional (últimas 24h) × 24h × potência (kW) × preço (R$/kWh) × 30 — é uma <strong>estimativa</strong>, não faturamento real auditado (não há dado de sessões/kWh efetivamente vendido nesta fonte).</p>
+        <p><strong>Status:</strong> refletem o último estado sincronizado de cada conector (protocolo OCPP): Available, Charging, Preparing, Finishing, Reserved = operacional (sem falha); Faulted, Unavailable, SuspendedEV = com problema.</p>
+        <p><strong>Operacional ≠ em uso:</strong> "operacional" inclui tanto Available (disponível, ocioso, sem ninguém carregando) quanto Charging (carregando de verdade). "Em uso" conta só o estado Charging — um posto pode estar 100% operacional (sem nenhuma falha) e 0% em uso.</p>
+        <p><strong>Atualização de status:</strong> um job agendado (a cada 5 min) salva um retrato do status de cada conector em um banco próprio, para calcular disponibilidade e uso ao longo do tempo (não só o instante atual).</p>
+        <p><strong>Preço e receita estimada:</strong> o preço por kWh vem do endpoint de detalhe de cada posto, coletado aos poucos (~20 postos a cada 5 min, cobertura completa em algumas horas) para não sobrecarregar o servidor da Tupi. A receita estimada de 30 dias = % de tempo <strong>em uso</strong> (Charging, últimas 24h) × 24h × potência (kW) × preço (R$/kWh) × 30 — é uma <strong>estimativa</strong>, não faturamento real auditado (não há dado de sessões/kWh efetivamente vendido nesta fonte).</p>
       </section>
     </div>
   </div>
@@ -149,6 +158,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
   (function () {
     const OPERATIONAL_STATES = new Set(["Available", "Charging", "Preparing", "Finishing", "Reserved"]);
     const PROBLEM_STATES = new Set(["Faulted", "Unavailable", "SuspendedEV"]);
+    const IN_USE_STATES = new Set(["Charging"]);
     const brl = (n) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
     let allStations = [];
@@ -182,16 +192,18 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
 
     function renderKPIs() {
       const totalConnectors = allStations.reduce((acc, s) => acc + s.connectors.length, 0);
-      let ok = 0, problem = 0;
+      let ok = 0, problem = 0, inUse = 0;
       for (const s of allStations) {
         for (const c of s.connectors) {
           if (OPERATIONAL_STATES.has(c.state)) ok++;
           else if (PROBLEM_STATES.has(c.state)) problem++;
+          if (IN_USE_STATES.has(c.state)) inUse++;
         }
       }
       document.getElementById("kpi-stations").textContent = allStations.length.toLocaleString("pt-BR");
       document.getElementById("kpi-connectors").textContent = totalConnectors.toLocaleString("pt-BR");
       document.getElementById("kpi-operational").textContent = totalConnectors ? Math.round((ok / totalConnectors) * 100) + "%" : "—";
+      document.getElementById("kpi-in-use").textContent = inUse.toLocaleString("pt-BR");
       document.getElementById("kpi-problem").textContent = problem.toLocaleString("pt-BR");
     }
 
@@ -255,15 +267,18 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         const connectorSummary = s.connectors.length ? s.connectors.map((c) => `${c.power ?? "?"}kW`).join(", ") : "—";
         const priceLabel = s.pricePerKwh ? `R$${s.pricePerKwh.toFixed(2)}/kWh` : "—";
         const revenueLabel = s.estimatedRevenue30d ? brl(s.estimatedRevenue30d) : "—";
+        const utilPcts = s.connectors.map((c) => c.utilizationPct24h).filter((p) => p !== null && p !== undefined);
+        const utilLabel = utilPcts.length ? Math.round((utilPcts.reduce((a, b) => a + b, 0) / utilPcts.length) * 100) + "%" : "—";
         return `<tr class="border-b border-slate-100 hover:bg-slate-50">
           <td class="py-2 pr-2 font-medium text-maia-navy">${s.name}</td>
           <td class="py-2 pr-2 text-slate-500">${s.network}</td>
           <td class="py-2 pr-2 text-slate-500">${connectorSummary}</td>
           <td class="py-2 pr-2">${badge}</td>
+          <td class="py-2 pr-2 text-slate-500">${utilLabel}</td>
           <td class="py-2 pr-2 text-slate-500">${priceLabel}</td>
           <td class="py-2 pr-2 text-right font-semibold ${s.estimatedRevenue30d ? "text-maia-green" : "text-slate-300"}">${revenueLabel}</td>
         </tr>`;
-      }).join("") || `<tr><td colspan="6" class="py-6 text-center text-slate-400">Nenhuma estação encontrada.</td></tr>`;
+      }).join("") || `<tr><td colspan="7" class="py-6 text-center text-slate-400">Nenhuma estação encontrada.</td></tr>`;
     }
 
     function renderPowerChart() {
