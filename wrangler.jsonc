@@ -10,6 +10,8 @@
   },
   "routes": [
     { "pattern": "staging.maiaenergiasrenovaveis.com.br", "custom_domain": true },
-    { "pattern": "portal.maiaenergiasrenovaveis.com.br", "custom_domain": true }
+    { "pattern": "portal.maiaenergiasrenovaveis.com.br", "custom_domain": true },
+    { "pattern": "maiaenergiasrenovaveis.com.br", "custom_domain": true },
+    { "pattern": "www.maiaenergiasrenovaveis.com.br", "custom_domain": true }
   ]
 }
