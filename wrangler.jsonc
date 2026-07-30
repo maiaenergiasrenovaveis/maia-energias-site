@@ -1,7 +1,15 @@
 {
   "name": "maia-energias-site",
   "compatibility_date": "2026-07-29",
+  "main": "worker.js",
   "assets": {
-    "directory": "./dist"
-  }
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "drop-trailing-slash",
+    "run_worker_first": true
+  },
+  "routes": [
+    { "pattern": "staging.maiaenergiasrenovaveis.com.br", "custom_domain": true },
+    { "pattern": "portal.maiaenergiasrenovaveis.com.br", "custom_domain": true }
+  ]
 }
