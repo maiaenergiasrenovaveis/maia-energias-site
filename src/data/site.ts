@@ -1,7 +1,7 @@
 export const site = {
   name: "Maia Energias Renováveis",
   legalName: "Maia Energias Renováveis",
-  cnpj: "38.538.005/0001-69",
+  cnpj: "32.538.005/0001-69",
   whatsapp: "5511981220711",
   whatsappDisplay: "+55 11 98122-0711",
   email: "contato@maiaenergiasrenovaveis.com.br",
