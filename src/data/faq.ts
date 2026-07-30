@@ -107,4 +107,19 @@ export const businessFaq: FaqItem[] = [
     answer:
       "Basta enviar as últimas 12 contas de energia da empresa. Com isso, a Maia consegue fazer uma primeira leitura do perfil de consumo e indicar as oportunidades mais prováveis.",
   },
+  {
+    question: "Como reduzir a conta de energia da minha indústria?",
+    answer:
+      "O caminho estruturado combina engenharia energética (diagnóstico técnico do consumo e da instalação), gestão de créditos de energia e correção de eventuais distorções na demanda contratada e no fator de potência. A partir desse diagnóstico, a Maia dimensiona as medidas com maior potencial de redução para o perfil específico da indústria.",
+  },
+  {
+    question: "Minha empresa paga multa por ultrapassagem de demanda contratada?",
+    answer:
+      "Se o consumo ultrapassa com frequência o valor contratado junto à distribuidora, é comum haver cobrança adicional por ultrapassagem de demanda. O primeiro passo é revisar se o valor contratado ainda faz sentido para o perfil atual de consumo — em muitos casos, um ajuste na demanda contratada elimina ou reduz essa cobrança.",
+  },
+  {
+    question: "Vale a pena instalar banco de capacitores na minha empresa?",
+    answer:
+      "Depende do fator de potência atual da instalação. Quando ele fica abaixo do mínimo exigido pela distribuidora, a empresa paga uma cobrança adicional na conta — nesses casos, o banco de capacitores costuma ter payback rápido. A Maia avalia isso dentro do diagnóstico energético antes de recomendar a instalação.",
+  },
 ];
