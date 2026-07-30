@@ -20,7 +20,7 @@ export const investorFaq: FaqItem[] = [
   {
     question: "Qual o retorno projetado de uma usina de investimento?",
     answer:
-      "O retorno projetado varia conforme localização, tipo de conexão e condições comerciais do projeto, ficando geralmente entre 1,5% e 3% ao mês em cenário conservador. Os indicadores exatos (TIR, VPL, payback) são apresentados no memorando técnico-financeiro de cada projeto.",
+      "O retorno projetado varia conforme localização, tipo de conexão e condições comerciais do projeto, ficando geralmente entre 1,5% e 2,7% ao mês em cenário conservador. Os indicadores exatos (TIR, VPL, payback) são apresentados no memorando técnico-financeiro de cada projeto.",
   },
   {
     question: "Quanto tempo leva para o investimento se pagar?",

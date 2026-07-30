@@ -12,7 +12,7 @@ const comparison = [
   { aspect: "Investimento inicial", imovel: "R$250 mil – R$400 mil", usina: "A partir de R$300 mil" },
   { aspect: "Receita mensal estimada", imovel: "R$1.000 a R$2.000", usina: "A partir de R$6.000*" },
   { aspect: "Despesas", imovel: "IPTU, manutenção, vacância", usina: "Manutenção reduzida" },
-  { aspect: "Retorno médio projetado", imovel: "~0,5% ao mês", usina: "~1,5% a 3% ao mês" },
+  { aspect: "Retorno médio projetado", imovel: "~0,5% ao mês", usina: "~1,5% a 2,7% ao mês" },
   { aspect: "Payback estimado", imovel: "15+ anos", usina: "~3 a 4 anos" },
 ];
 
@@ -28,7 +28,7 @@ const serviceSchema = {
 
 <BaseLayout
   title="Invista em Usinas Solares"
-  description="Estruturação de investimentos em usinas solares fotovoltaicas: análise técnica, financeira e regulatória, com retorno projetado e payback estimado entre 3 e 4 anos."
+  description="Investimento em usina solar via SPE: ativo real de infraestrutura, geração distribuída, I-REC e créditos de carbono, com análise técnica, financeira e regulatória por projeto."
 >
   <script type="application/ld+json" set:html={JSON.stringify(serviceSchema)} slot="head" />
   <section class="bg-maia-navy text-white">
@@ -64,6 +64,20 @@ const serviceSchema = {
       </p>
     </div>
     <Image src={usinaIllustration} alt="Ilustração de usina solar de investimento" width={400} height={300} class="w-full h-auto rounded-xl border border-slate-200" />
+  </section>
+
+  <section class="bg-slate-50">
+    <div class="mx-auto max-w-3xl px-4 py-16">
+      <h2 class="text-2xl font-bold text-maia-navy">Como funciona a estruturação de SPE em projetos solares?</h2>
+      <p class="mt-4 text-slate-600 leading-relaxed">
+        Uma SPE (Sociedade de Propósito Específico) é a empresa criada exclusivamente para deter os
+        ativos e operar uma usina solar de investimento. Ela isola o projeto financeira e
+        juridicamente de outras atividades — o investidor participa dessa SPE (como sócio ou
+        detentor de cotas, conforme o modelo do projeto), e toda a receita, geração distribuída e
+        eventual receita de créditos de carbono ou I-REC ficam registradas na estrutura da própria
+        SPE, com governança e prestação de contas dedicadas ao projeto.
+      </p>
+    </div>
   </section>
 
   <section class="bg-slate-50">
