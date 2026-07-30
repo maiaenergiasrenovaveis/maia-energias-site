@@ -7,7 +7,7 @@ import sitemap from '@astrojs/sitemap';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://staging.maiaenergiasrenovaveis.com.br',
+  site: 'https://maiaenergiasrenovaveis.com.br',
   vite: {
     plugins: [tailwindcss()]
   },
