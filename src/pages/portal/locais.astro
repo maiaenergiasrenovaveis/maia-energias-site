@@ -1,0 +1,155 @@
+---
+import PortalLayout from "../../layouts/PortalLayout.astro";
+import { prospectedLocations, locationStatusCounts } from "../../data/eletropostos-sp";
+
+const counts = locationStatusCounts();
+const statusOrder = ["Recebido", "Em análise", "Aprovado", "Implantação", "Instalado"] as const;
+const statusColors: Record<string, string> = {
+  "Recebido": "#f5a623", "Em análise": "#ef4444", "Aprovado": "#1c75bc",
+  "Implantação": "#a855f7", "Instalado": "#5fa746",
+};
+const dataPayload = { prospectedLocations, statusColors };
+---
+
+<PortalLayout title="Locais de Eletropostos" active="locais">
+  <script type="application/json" id="locais-data" set:html={JSON.stringify(dataPayload)} />
+
+  <div class="bg-amber-50 border-b border-amber-200 text-amber-800 text-sm text-center py-2 px-4">
+    Dados de demonstração — aguardando integração com a API da Tupi.
+  </div>
+
+  <div class="mx-auto max-w-7xl px-4 py-6">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+      <div>
+        <h1 class="text-lg font-bold text-maia-navy">Locais Prospectados</h1>
+        <p class="text-sm text-slate-500">{prospectedLocations.length} locais cadastrados em São Paulo</p>
+      </div>
+      <button id="new-location-btn" class="rounded-lg bg-maia-orange hover:bg-maia-orange-dark text-white text-sm font-semibold px-4 py-2.5 transition-colors">+ Novo local</button>
+    </div>
+
+    <!-- Status counters -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <button data-status="" class="status-filter-btn rounded-xl border-2 border-maia-navy bg-white p-4 text-left">
+        <p class="text-2xl font-bold text-maia-navy">{prospectedLocations.length}</p>
+        <p class="text-xs text-slate-500">Total</p>
+      </button>
+      {statusOrder.map((s) => (
+        <button data-status={s} class="status-filter-btn rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-slate-300">
+          <p class="text-2xl font-bold" style={`color:${statusColors[s]}`}>{counts[s]}</p>
+          <p class="text-xs text-slate-500">{s}</p>
+        </button>
+      ))}
+    </div>
+
+    <!-- Map -->
+    <div class="rounded-xl bg-white border border-slate-200 p-4 mb-6">
+      <div id="locais-map" class="h-[420px] rounded-lg z-0"></div>
+    </div>
+
+    <!-- List -->
+    <div class="rounded-xl bg-white border border-slate-200 p-5">
+      <div class="flex flex-wrap items-center gap-3 mb-4">
+        <h2 class="font-bold text-maia-navy text-sm">Lista de Locais</h2>
+        <input id="search-input" placeholder="Buscar por nome, cidade..." class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm flex-1 min-w-[180px]" />
+        <select id="score-filter" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+          <option value="">Qualquer score</option>
+          <option value="80">Score ≥ 80</option>
+          <option value="60">Score ≥ 60</option>
+          <option value="40">Score ≥ 40</option>
+        </select>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-200">
+              <th class="py-2 pr-2">Local</th>
+              <th class="py-2 pr-2">Cidade</th>
+              <th class="py-2 pr-2">Score</th>
+              <th class="py-2 pr-2">Status</th>
+              <th class="py-2 pr-2">Geração Solar</th>
+              <th class="py-2 pr-2">Cadastrado</th>
+            </tr>
+          </thead>
+          <tbody id="locations-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</PortalLayout>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script is:inline>
+  (function () {
+    const { prospectedLocations, statusColors } = JSON.parse(document.getElementById("locais-data").textContent);
+
+    let statusFilter = "";
+    let search = "";
+    let minScore = 0;
+
+    document.querySelectorAll(".status-filter-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        statusFilter = btn.dataset.status;
+        document.querySelectorAll(".status-filter-btn").forEach((b) => b.classList.remove("ring-2", "ring-maia-blue"));
+        btn.classList.add("ring-2", "ring-maia-blue");
+        render();
+      });
+    });
+    document.getElementById("search-input").addEventListener("input", (e) => { search = e.target.value.toLowerCase(); render(); });
+    document.getElementById("score-filter").addEventListener("change", (e) => { minScore = Number(e.target.value) || 0; render(); });
+    document.getElementById("new-location-btn").addEventListener("click", () => {
+      alert("Formulário de novo local — a implementar quando a integração com a API da Tupi estiver ativa.");
+    });
+
+    function filtered() {
+      return prospectedLocations.filter((l) =>
+        (!statusFilter || l.status === statusFilter) &&
+        (!search || l.nome.toLowerCase().includes(search) || l.cidade.toLowerCase().includes(search)) &&
+        l.score >= minScore
+      );
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById("locations-tbody");
+      const list = [...filtered()].sort((a, b) => b.score - a.score);
+      tbody.innerHTML = list.map((l) => `
+        <tr class="border-b border-slate-100 hover:bg-slate-50">
+          <td class="py-2 pr-2 font-medium text-maia-navy">${l.nome}</td>
+          <td class="py-2 pr-2 text-slate-500">${l.cidade}</td>
+          <td class="py-2 pr-2">
+            <span class="inline-flex items-center gap-1.5">
+              <span class="h-1.5 w-12 rounded-full bg-slate-200 overflow-hidden inline-block relative">
+                <span class="h-full block bg-emerald-500" style="width:${l.score}%"></span>
+              </span>
+              ${l.score}
+            </span>
+          </td>
+          <td class="py-2 pr-2"><span class="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style="background:${statusColors[l.status]}">${l.status}</span></td>
+          <td class="py-2 pr-2 text-slate-500">${l.geracaoSolar}</td>
+          <td class="py-2 pr-2 text-slate-400">${l.cadastrado.split("-").reverse().join("/")}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="6" class="py-6 text-center text-slate-400">Nenhum local encontrado.</td></tr>`;
+    }
+
+    let map, layer;
+    function initMap() {
+      map = L.map("locais-map").setView([-22.6, -48.0], 7);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
+      layer = L.layerGroup().addTo(map);
+    }
+    function renderMap() {
+      layer.clearLayers();
+      for (const l of filtered()) {
+        L.circleMarker([l.lat, l.lng], {
+          radius: 8, color: statusColors[l.status], fillColor: statusColors[l.status], fillOpacity: 0.85, weight: 1,
+        }).bindPopup(`<strong>${l.nome}</strong><br>${l.cidade}<br>Score ${l.score} · ${l.status}`).addTo(layer);
+      }
+    }
+
+    function render() { renderTable(); renderMap(); }
+
+    initMap();
+    render();
+  })();
+</script>

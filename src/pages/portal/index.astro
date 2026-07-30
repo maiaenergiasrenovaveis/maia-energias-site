@@ -1,0 +1,59 @@
+---
+import "../../styles/global.css";
+import { Image } from "astro:assets";
+import logo from "../../assets/logo.png";
+---
+
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Login | Portal Maia Energias</title>
+  </head>
+  <body class="bg-maia-navy min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-sm">
+      <div class="flex flex-col items-center mb-8">
+        <div class="rounded-xl bg-white px-4 py-3 mb-4">
+          <Image src={logo} alt="Maia Energias Renováveis" height={40} class="h-10 w-auto" />
+        </div>
+        <p class="text-white/60 text-sm">Portal de Monitoramento de Eletropostos</p>
+      </div>
+      <form id="login-form" class="bg-white rounded-2xl shadow-xl p-8 space-y-4">
+        <div>
+          <label for="user" class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Usuário</label>
+          <input id="user" type="text" autocomplete="username" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-maia-blue" />
+        </div>
+        <div>
+          <label for="pass" class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Senha</label>
+          <input id="pass" type="password" autocomplete="current-password" class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-maia-blue" />
+        </div>
+        <p id="login-error" class="hidden text-sm text-red-600">Usuário ou senha inválidos.</p>
+        <button type="submit" class="w-full rounded-lg bg-maia-orange hover:bg-maia-orange-dark transition-colors text-white font-semibold py-2.5 text-sm">
+          Entrar
+        </button>
+      </form>
+      <a href="/" class="block text-center text-white/50 text-sm mt-6 hover:text-white/80">← Voltar ao site</a>
+    </div>
+    <script>
+      // Client-side gate only — not real authentication. Protect this route
+      // properly at the edge (e.g. Cloudflare Access) before handling sensitive data.
+      const VALID_USER = "admin";
+      const VALID_PASS = "maia2026";
+
+      document.getElementById("login-form")?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const user = (document.getElementById("user") as HTMLInputElement).value.trim();
+        const pass = (document.getElementById("pass") as HTMLInputElement).value;
+        if (user === VALID_USER && pass === VALID_PASS) {
+          sessionStorage.setItem("maia-portal-auth", "1");
+          location.href = "/portal/hub";
+        } else {
+          document.getElementById("login-error")?.classList.remove("hidden");
+        }
+      });
+    </script>
+  </body>
+</html>

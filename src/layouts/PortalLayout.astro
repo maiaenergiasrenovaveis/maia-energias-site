@@ -1,0 +1,92 @@
+---
+import "../styles/global.css";
+import { Image } from "astro:assets";
+import logoIcon from "../assets/logo-icon.png";
+
+interface Props {
+  title: string;
+  active?: "monitor" | "locais" | "simulador" | "";
+}
+const { title, active = "" } = Astro.props;
+
+const navItems = [
+  { key: "monitor", href: "/portal/monitor", label: "Monitor" },
+  { key: "locais", href: "/portal/locais", label: "Locais" },
+  { key: "simulador", href: "/portal/simulador", label: "Simulador ROI" },
+];
+---
+
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title} | Portal Maia Energias</title>
+    <slot name="head" />
+  </head>
+  <body class="bg-slate-50 text-maia-navy min-h-screen">
+    <header class="bg-maia-navy text-white sticky top-0 z-50">
+      <div class="mx-auto max-w-7xl px-4 flex items-center justify-between h-16">
+        <a href="/portal/hub" class="flex items-center gap-2.5">
+          <Image src={logoIcon} alt="" height={32} class="h-8 w-auto" />
+          <span class="leading-tight">
+            <span class="block text-sm font-bold">MAIA</span>
+            <span class="block text-[9px] font-semibold uppercase tracking-wide text-white/60">Eletropostos SP</span>
+          </span>
+        </a>
+        <nav class="hidden md:flex items-center gap-1">
+          {
+            navItems.map((item) => (
+              <a
+                href={item.href}
+                class:list={[
+                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                  active === item.key ? "bg-white/10 text-maia-orange" : "text-white/80 hover:text-white hover:bg-white/5",
+                ]}
+              >
+                {item.label}
+              </a>
+            ))
+          }
+        </nav>
+        <div class="flex items-center gap-3 text-sm">
+          <span class="hidden sm:inline text-white/60" id="portal-user">admin</span>
+          <a href="/portal" id="portal-logout" class="rounded-lg bg-white/10 px-3 py-1.5 font-medium hover:bg-white/20 transition-colors">Sair</a>
+        </div>
+      </div>
+      <nav class="md:hidden flex items-center gap-1 px-4 pb-2 -mt-1">
+        {
+          navItems.map((item) => (
+            <a
+              href={item.href}
+              class:list={[
+                "px-3 py-1.5 rounded-lg text-xs font-medium",
+                active === item.key ? "bg-white/10 text-maia-orange" : "text-white/70",
+              ]}
+            >
+              {item.label}
+            </a>
+          ))
+        }
+      </nav>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer class="border-t border-slate-200 py-4 text-center text-xs text-slate-400">
+      Portal Maia Energias Renováveis · Uso interno · {new Date().getFullYear()}
+    </footer>
+    <script>
+      // Simple client-side session gate — not real security.
+      // Protects against casual access, not a substitute for proper auth.
+      if (!sessionStorage.getItem("maia-portal-auth") && !location.pathname.endsWith("/portal") && !location.pathname.endsWith("/portal/")) {
+        location.href = "/portal";
+      }
+      document.getElementById("portal-logout")?.addEventListener("click", () => {
+        sessionStorage.removeItem("maia-portal-auth");
+      });
+    </script>
+  </body>
+</html>

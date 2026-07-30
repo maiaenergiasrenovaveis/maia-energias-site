@@ -1,0 +1,341 @@
+---
+import PortalLayout from "../../layouts/PortalLayout.astro";
+import { regions, marketKpis, regionStats, stations, networkStats, powerDistribution } from "../../data/eletropostos-sp";
+
+const updatedAt = new Date(marketKpis.atualizadoEm).toLocaleString("pt-BR", {
+  day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+});
+
+const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+
+const dataPayload = { regions, marketKpis, regionStats, stations, networkStats, powerDistribution };
+---
+
+<PortalLayout title="Monitor de Eletropostos" active="monitor">
+  <script type="application/json" id="portal-data" set:html={JSON.stringify(dataPayload)} />
+
+  <div class="bg-amber-50 border-b border-amber-200 text-amber-800 text-sm text-center py-2 px-4">
+    Dados de demonstração — aguardando integração com a API da Tupi. Números ilustrativos, não coletados em tempo real.
+  </div>
+
+  <div class="bg-white border-b border-slate-200">
+    <div class="mx-auto max-w-7xl px-4 py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div>
+        <h1 class="text-lg font-bold text-maia-navy">Maia <span class="text-maia-orange-dark">Eletropostos</span></h1>
+        <p class="text-sm text-slate-500">Inteligência de Eletropostos · Estado de São Paulo</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <div id="region-filter" class="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1">
+          <button data-region="" class="region-btn px-3 py-1.5 rounded-md text-xs font-semibold bg-maia-green text-white">Todos</button>
+          {regions.map((r) => (
+            <button data-region={r.code} class="region-btn px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600 hover:bg-slate-200">{r.code}</button>
+          ))}
+        </div>
+        <span class="text-xs text-slate-400 whitespace-nowrap">Atualizado {updatedAt} (BRT)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="mx-auto max-w-7xl px-4 py-6">
+    <div class="mb-6">
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Cidade</label>
+      <select id="city-filter" class="mt-1 block w-full max-w-xs rounded-lg border border-slate-300 px-3 py-2 text-sm">
+        <option value="">Todas as cidades</option>
+      </select>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div class="rounded-xl bg-white border border-slate-200 p-5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Mercado DC</p>
+        <p class="mt-1 text-3xl font-bold text-maia-navy">{marketKpis.mercadoDC.toLocaleString("pt-BR")}</p>
+      </div>
+      <div class="rounded-xl bg-white border border-slate-200 p-5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Nossa Cobertura</p>
+        <p class="mt-1 text-3xl font-bold text-maia-green">{Math.round((marketKpis.coberturaMonitorados / marketKpis.mercadoDC) * 100)}%</p>
+        <p class="text-xs text-slate-400 mt-1">{marketKpis.coberturaMonitorados} de {marketKpis.mercadoDC} monitorados</p>
+      </div>
+      <div class="rounded-xl bg-white border border-slate-200 p-5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Receita do Mercado</p>
+        <p class="mt-1 text-3xl font-bold text-maia-navy">{brl(marketKpis.receitaMercadoMensal)}</p>
+        <p class="text-xs text-slate-400 mt-1">estimativa / mês</p>
+      </div>
+      <div class="rounded-xl bg-white border border-slate-200 p-5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Demanda</p>
+        <p class="mt-1 text-3xl font-bold text-maia-orange-dark">{marketKpis.demandaMedia7d}%</p>
+        <p class="text-xs text-slate-400 mt-1">ocupação média (7d)</p>
+      </div>
+    </div>
+
+    <!-- Comparativo por região -->
+    <section class="mb-8">
+      <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-1">Comparativo por Região</h2>
+      <p class="text-xs text-slate-400 mb-4 pl-3">Frota = veículos 100% elétricos (BEV) · fonte RENAVAM/SENATRAN</p>
+      <div id="region-cards" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"></div>
+    </section>
+
+    <!-- Mapa -->
+    <section class="mb-8 rounded-xl bg-white border border-slate-200 p-5">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div>
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3">Mapa das Estações DC — por rede</h2>
+          <p class="text-xs text-slate-400 pl-3">Cor = rede que opera o posto. Clique para detalhes.</p>
+        </div>
+        <div id="map-legend" class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600"></div>
+      </div>
+      <div id="map" class="h-[420px] rounded-lg z-0"></div>
+    </section>
+
+    <!-- Ocupação 24h -->
+    <section class="mb-8 rounded-xl bg-white border border-slate-200 p-5">
+      <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Ocupação DC — últimas 24h</h2>
+      <canvas id="occupancyChart" height="90"></canvas>
+    </section>
+
+    <!-- Top 10 -->
+    <section class="mb-8 rounded-xl bg-white border border-slate-200 p-5">
+      <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3">Top Eletropostos — Faturamento</h2>
+        <input id="station-search" placeholder="Filtrar por nome ou cidade..." class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm w-56" />
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-200">
+              <th class="py-2 pr-2">#</th>
+              <th class="py-2 pr-2">Posto</th>
+              <th class="py-2 pr-2">Cidade</th>
+              <th class="py-2 pr-2">Potência</th>
+              <th class="py-2 pr-2">Ocup.</th>
+              <th class="py-2 pr-2">H/dia</th>
+              <th class="py-2 pr-2">Preço</th>
+              <th class="py-2 pr-2 text-right">Receita 30 dias</th>
+            </tr>
+          </thead>
+          <tbody id="stations-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Inteligência competitiva -->
+    <section class="mb-8 rounded-xl bg-white border border-slate-200 p-5">
+      <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Inteligência Competitiva — Faturamento por rede</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-200">
+              <th class="py-2 pr-2">Rede</th>
+              <th class="py-2 pr-2">Estações</th>
+              <th class="py-2 pr-2">kW Inst.</th>
+              <th class="py-2 pr-2">Ocup. Média</th>
+              <th class="py-2 pr-2">Preço Médio</th>
+              <th class="py-2 pr-2">kWh (30D)</th>
+              <th class="py-2 pr-2 text-right">Receita 30D</th>
+            </tr>
+          </thead>
+          <tbody id="networks-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Potência instalada -->
+    <section class="mb-8 rounded-xl bg-white border border-slate-200 p-5">
+      <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Potência Instalada no Mercado (DC)</h2>
+      <canvas id="powerChart" height="90"></canvas>
+    </section>
+
+    <!-- Metodologia -->
+    <section class="rounded-xl bg-slate-100 p-5 text-xs text-slate-500 space-y-1.5">
+      <p class="font-semibold text-slate-600 uppercase tracking-wide text-[11px] mb-2">Metodologia & Fontes</p>
+      <p><strong>Universo do mercado (postos DC):</strong> inventário de estações no estado de SP, atualização semanal.</p>
+      <p><strong>Monitoramento em tempo real:</strong> coleta periódica junto às redes operadoras via API da Tupi (Tupinambá).</p>
+      <p><strong>Receita estimada:</strong> a partir de leituras de ocupação × potência × preço/kWh por sessão. Números de referência, não auditados.</p>
+      <p><strong>Região e cidade:</strong> classificados pelos polígonos municipais oficiais (IBGE).</p>
+      <p><strong>Demanda:</strong> ocupação média (conectores carregando ÷ total) nos últimos 7 dias.</p>
+    </section>
+  </div>
+</PortalLayout>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script is:inline src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+<script is:inline>
+  (function () {
+    const data = JSON.parse(document.getElementById("portal-data").textContent);
+    const { regions, regionStats, stations, networkStats, powerDistribution } = data;
+
+    const brl = (n) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+    const num = (n) => Number(n).toLocaleString("pt-BR");
+
+    const NETWORK_COLORS = {
+      "Ipiranga": "#1c75bc", "Shell Recharge": "#f5a623", "Enel X": "#5fa746",
+      "Voltbras": "#a855f7", "BYD": "#ef4444", "ZEV": "#06b6d4", "Tupi Rede": "#0b3d62",
+    };
+    const colorFor = (rede) => NETWORK_COLORS[rede] || "#94a3b8";
+
+    let currentRegion = "";
+    let currentCity = "";
+    let stationSearch = "";
+
+    // City filter options
+    const citySelect = document.getElementById("city-filter");
+    const cities = [...new Set(stations.map((s) => s.cidade))].sort();
+    for (const c of cities) {
+      const opt = document.createElement("option");
+      opt.value = c; opt.textContent = c;
+      citySelect.appendChild(opt);
+    }
+    citySelect.addEventListener("change", (e) => { currentCity = e.target.value; render(); });
+
+    // Region filter buttons
+    document.querySelectorAll(".region-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        currentRegion = btn.dataset.region;
+        document.querySelectorAll(".region-btn").forEach((b) => {
+          b.classList.remove("bg-maia-green", "text-white");
+          b.classList.add("text-slate-600");
+        });
+        btn.classList.add("bg-maia-green", "text-white");
+        btn.classList.remove("text-slate-600");
+        render();
+      });
+    });
+
+    document.getElementById("station-search").addEventListener("input", (e) => {
+      stationSearch = e.target.value.toLowerCase();
+      renderStationsTable();
+    });
+
+    // Region cards
+    function renderRegionCards() {
+      const wrap = document.getElementById("region-cards");
+      wrap.innerHTML = "";
+      const list = currentRegion ? regions.filter((r) => r.code === currentRegion) : regions;
+      for (const r of list) {
+        const s = regionStats[r.code];
+        const cobPct = Math.round((s.monitorado / s.total) * 100);
+        wrap.insertAdjacentHTML("beforeend", `
+          <div class="rounded-xl bg-white border-l-4 border-maia-navy p-4">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-maia-navy">${r.code}</span>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${s.ocupPct >= 20 ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-600"}">${s.ocupPct}% ocup.</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">${r.name}</p>
+            <dl class="mt-3 space-y-1.5 text-xs">
+              <div class="flex justify-between"><dt class="text-slate-500">Estações DC</dt><dd class="font-semibold">${num(s.estacoesDC)}</dd></div>
+              <div class="flex justify-between"><dt class="text-slate-500">Receita 30D</dt><dd class="font-semibold text-maia-green">${brl(s.receita30d)}</dd></div>
+              <div class="flex justify-between"><dt class="text-slate-500">Cobertura</dt><dd class="font-semibold">${cobPct}%</dd></div>
+              <div class="flex justify-between"><dt class="text-slate-500">Frota VEs</dt><dd class="font-semibold">${num(s.frotaVE)}</dd></div>
+            </dl>
+          </div>
+        `);
+      }
+    }
+
+    // Filtered stations
+    function filteredStations() {
+      return stations.filter((s) =>
+        (!currentRegion || s.regiao === currentRegion) &&
+        (!currentCity || s.cidade === currentCity) &&
+        (!stationSearch || s.nome.toLowerCase().includes(stationSearch) || s.cidade.toLowerCase().includes(stationSearch))
+      );
+    }
+
+    function renderStationsTable() {
+      const tbody = document.getElementById("stations-tbody");
+      const list = [...filteredStations()].sort((a, b) => b.receita30d - a.receita30d);
+      tbody.innerHTML = list.map((s, i) => `
+        <tr class="border-b border-slate-100 hover:bg-slate-50">
+          <td class="py-2 pr-2 text-slate-400">${i + 1}</td>
+          <td class="py-2 pr-2 font-medium text-maia-navy">${s.rede} | ${s.nome}</td>
+          <td class="py-2 pr-2 text-slate-500">${s.cidade}</td>
+          <td class="py-2 pr-2 text-slate-500">${s.potenciaKw}kW</td>
+          <td class="py-2 pr-2 font-semibold ${s.ocupacaoPct >= 45 ? "text-red-600" : "text-slate-700"}">${s.ocupacaoPct}%</td>
+          <td class="py-2 pr-2 text-slate-500">${s.horasDia.toFixed(1)}h</td>
+          <td class="py-2 pr-2 text-slate-500">R$${s.precoKwh.toFixed(2)}/kWh</td>
+          <td class="py-2 pr-2 text-right font-semibold text-maia-green">${brl(s.receita30d)}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="8" class="py-6 text-center text-slate-400">Nenhum posto encontrado.</td></tr>`;
+    }
+
+    function renderNetworksTable() {
+      const tbody = document.getElementById("networks-tbody");
+      tbody.innerHTML = networkStats.map((n) => `
+        <tr class="border-b border-slate-100 hover:bg-slate-50">
+          <td class="py-2 pr-2 font-medium" style="color:${colorFor(n.rede)}">${n.rede}</td>
+          <td class="py-2 pr-2 text-slate-500">${num(n.estacoes)}</td>
+          <td class="py-2 pr-2 text-slate-500">${num(n.kwInst)} kW</td>
+          <td class="py-2 pr-2 text-slate-500">${n.ocupMedia}%</td>
+          <td class="py-2 pr-2 text-slate-500">R$${n.precoMedio.toFixed(2)}/kWh</td>
+          <td class="py-2 pr-2 text-slate-500">${num(n.kwh30d)} kWh</td>
+          <td class="py-2 pr-2 text-right font-semibold text-maia-green">${brl(n.receita30d)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderLegend() {
+      const el = document.getElementById("map-legend");
+      el.innerHTML = Object.keys(NETWORK_COLORS).map((r) =>
+        `<span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full inline-block" style="background:${colorFor(r)}"></span>${r}</span>`
+      ).join("");
+    }
+
+    // Map
+    let map, markersLayer;
+    function initMap() {
+      map = L.map("map").setView([-22.6, -48.0], 7);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap",
+      }).addTo(map);
+      markersLayer = L.layerGroup().addTo(map);
+    }
+    function renderMap() {
+      markersLayer.clearLayers();
+      for (const s of filteredStations()) {
+        L.circleMarker([s.lat, s.lng], {
+          radius: 7, color: colorFor(s.rede), fillColor: colorFor(s.rede), fillOpacity: 0.85, weight: 1,
+        }).bindPopup(`<strong>${s.nome}</strong><br>${s.rede} · ${s.cidade}<br>${s.potenciaKw}kW · ${s.ocupacaoPct}% ocupação`)
+          .addTo(markersLayer);
+      }
+    }
+
+    // Occupancy chart (synthetic 24h curve)
+    function renderOccupancyChart() {
+      const labels = Array.from({ length: 48 }, (_, i) => {
+        const h = Math.floor(i / 2), m = i % 2 === 0 ? "00" : "30";
+        return `${String(h).padStart(2, "0")}:${m}`;
+      });
+      const base = [14,13,12,12,13,15,17,19,21,23,25,26,27,26,24,22,21,22,24,26,27,25,22,19,17,15,14,13,12,11,10,10,11,13,15,18,21,24,27,29,28,26,23,20,18,16,15,14];
+      new Chart(document.getElementById("occupancyChart"), {
+        type: "line",
+        data: { labels, datasets: [{ label: "Ocupação (%)", data: base, borderColor: "#0b3d62", backgroundColor: "rgba(11,61,98,0.08)", fill: true, tension: 0.35, pointRadius: 0 }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: { callback: (v) => v + "%" } } } },
+      });
+    }
+
+    function renderPowerChart() {
+      new Chart(document.getElementById("powerChart"), {
+        type: "bar",
+        data: {
+          labels: powerDistribution.map((p) => p.faixa),
+          datasets: [{ data: powerDistribution.map((p) => p.conectores), backgroundColor: ["#93c5fd","#60a5fa","#1c75bc","#0b3d62","#5fa746"] }],
+        },
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+      });
+    }
+
+    function render() {
+      renderRegionCards();
+      renderStationsTable();
+      renderMap();
+    }
+
+    initMap();
+    renderLegend();
+    renderNetworksTable();
+    renderOccupancyChart();
+    renderPowerChart();
+    render();
+  })();
+</script>
