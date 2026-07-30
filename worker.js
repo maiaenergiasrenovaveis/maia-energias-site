@@ -18,6 +18,9 @@ const SP_REGIONS = [
 ];
 
 const WINDOW_DAYS = { "24h": 1, "7d": 7, "15d": 15, "30d": 30, all: 30 };
+// Abaixo disso, a média de utilização é ruído estatístico (ex.: 1 leitura em
+// "Charging" vira "100% de uso") — não mostramos % nem receita até ter esse mínimo.
+const MIN_SAMPLES_FOR_ESTIMATE = 12;
 
 function chunk(arr, size) {
   const out = [];
@@ -207,13 +210,15 @@ async function buildEletropostosPayload(env, windowKey) {
       const key = s.station_id + ":" + c.connector_index;
       const latest = latestByKey.get(key);
       const stats = statsByKey.get(key);
+      const enough = stats && stats.samples >= MIN_SAMPLES_FOR_ESTIMATE;
       return {
         power: c.power,
         current: c.current,
         state: latest || null,
         inUseNow: latest ? IN_USE_STATES.has(latest) : null,
-        uptimePctWindow: stats ? Math.round(stats.pct * 1000) / 1000 : null,
-        utilizationPctWindow: stats ? Math.round(stats.utilization * 1000) / 1000 : null,
+        samples: stats?.samples ?? 0,
+        uptimePctWindow: enough ? Math.round(stats.pct * 1000) / 1000 : null,
+        utilizationPctWindow: enough ? Math.round(stats.utilization * 1000) / 1000 : null,
       };
     });
     const pricing = pricingByStation.get(s.station_id) || null;
@@ -295,14 +300,15 @@ async function buildStationDetail(env, stationId) {
       .bind(stationId, since)
       .first();
     const hours = days * 24;
+    const enough = stats && stats.samples >= MIN_SAMPLES_FOR_ESTIMATE;
     let revenue = null;
-    if (pricingRow?.price_per_kwh && totalPowerKw && stats?.utilization_pct !== null && stats?.samples > 0) {
+    if (enough && pricingRow?.price_per_kwh && totalPowerKw) {
       revenue = Math.round(stats.utilization_pct * hours * totalPowerKw * pricingRow.price_per_kwh);
     }
     revenueByWindow[key] = {
       revenue,
-      utilizationPct: stats?.utilization_pct ?? null,
-      uptimePct: stats?.uptime_pct ?? null,
+      utilizationPct: enough ? stats.utilization_pct : null,
+      uptimePct: enough ? stats.uptime_pct : null,
       samples: stats?.samples ?? 0,
     };
   }

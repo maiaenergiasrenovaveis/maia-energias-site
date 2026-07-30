@@ -186,6 +186,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <p><strong>Operacional ≠ em uso:</strong> "operacional" inclui tanto Available (disponível, ocioso, sem ninguém carregando) quanto Charging (carregando de verdade). "Em uso" conta só o estado Charging — um posto pode estar 100% operacional (sem nenhuma falha) e 0% em uso.</p>
         <p><strong>Atualização de status:</strong> um job agendado (a cada 5 min) salva um retrato do status de cada conector em um banco próprio, para calcular disponibilidade e uso ao longo do tempo (não só o instante atual). O histórico começou a ser coletado em 30/07/2026 — janelas maiores (7d, 15d, 30d) vão ficando mais precisas com o tempo.</p>
         <p><strong>Preço e receita estimada:</strong> o preço por kWh vem do endpoint de detalhe de cada posto, coletado aos poucos (~20 postos a cada 5 min, cobertura completa em algumas horas) para não sobrecarregar o servidor da Tupi. Receita estimada = % de tempo <strong>em uso</strong> (Charging) na janela × horas da janela × potência (kW) × preço (R$/kWh) — é uma <strong>estimativa</strong>, não faturamento real auditado (não há dado de sessões/kWh efetivamente vendido nesta fonte).</p>
+        <p><strong>Janelas maiores (7d/15d/30d/Acumulado) são projeções, não dado acumulado real</strong> enquanto o histórico for curto: pegamos a taxa de uso média já observada e projetamos para o tamanho da janela. Só mostramos % e receita quando há pelo menos 12 leituras (1h) para aquele conector — abaixo disso aparece "coletando…", para não exibir números como "100% de uso" que seriam só ruído de amostra pequena (ex.: 1 leitura que por acaso pegou o carregador em uso).</p>
       </section>
     </div>
   </div>
@@ -281,6 +282,16 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
     function stationUtilPct(s) {
       const vals = s.connectors.map((c) => c.utilizationPctWindow).filter((v) => v !== null && v !== undefined);
       return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    }
+
+    // Diferencia "sem telemetria" (nunca vai ter dado) de "coletando dados"
+    // (tem conector, mas ainda não juntou amostra suficiente para um % confiável).
+    function usageLabel(s) {
+      if (s.connectors.length === 0) return "—";
+      const val = stationUtilPct(s);
+      if (val !== null) return pct(val);
+      const hasSamples = s.connectors.some((c) => (c.samples || 0) > 0);
+      return hasSamples ? "coletando…" : "—";
     }
 
     function currentFilters() {
@@ -399,13 +410,12 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         .slice(0, 10);
       document.getElementById("top10-tbody").innerHTML = ranked.map((s, i) => {
         const powerLabel = s.connectors.map((c) => `${c.power ?? "?"}kW`).join(", ");
-        const util = stationUtilPct(s);
         return `<tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="window.__openStationDetail('${s.id}')">
           <td class="py-2 pr-2 text-slate-400">${i + 1}</td>
           <td class="py-2 pr-2 font-medium text-maia-navy">${s.network} | ${s.name}</td>
           <td class="py-2 pr-2 text-slate-500">${s.regionName}</td>
           <td class="py-2 pr-2 text-slate-500">${powerLabel}</td>
-          <td class="py-2 pr-2 font-semibold text-maia-blue">${pct(util)}</td>
+          <td class="py-2 pr-2 font-semibold text-maia-blue">${usageLabel(s)}</td>
           <td class="py-2 pr-2 text-slate-500">${s.pricePerKwh ? "R$" + s.pricePerKwh.toFixed(2) + "/kWh" : "—"}</td>
           <td class="py-2 pr-2 text-right font-semibold text-maia-green">${brl(s.estimatedRevenue)}</td>
         </tr>`;
@@ -432,14 +442,13 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         const connectorSummary = s.connectors.length ? s.connectors.map((c) => `${c.power ?? "?"}kW`).join(", ") : "—";
         const priceLabel = s.pricePerKwh ? `R$${s.pricePerKwh.toFixed(2)}/kWh` : "—";
         const revenueLabel = s.estimatedRevenue ? brl(s.estimatedRevenue) : "—";
-        const util = stationUtilPct(s);
         return `<tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="window.__openStationDetail('${s.id}')">
           <td class="py-2 pr-2 font-medium text-maia-navy">${s.name}</td>
           <td class="py-2 pr-2 text-slate-500">${s.network}</td>
           <td class="py-2 pr-2 text-slate-500">${s.regionName}</td>
           <td class="py-2 pr-2 text-slate-500">${connectorSummary}</td>
           <td class="py-2 pr-2">${badge}</td>
-          <td class="py-2 pr-2 text-slate-500">${pct(util)}</td>
+          <td class="py-2 pr-2 text-slate-500">${usageLabel(s)}</td>
           <td class="py-2 pr-2 text-slate-500">${priceLabel}</td>
           <td class="py-2 pr-2 text-right font-semibold ${s.estimatedRevenue ? "text-maia-green" : "text-slate-300"}">${revenueLabel}</td>
         </tr>`;
@@ -573,11 +582,15 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       document.getElementById("detail-body").classList.remove("hidden");
     }
 
+    const MIN_SAMPLES_FOR_ESTIMATE = 12; // mantido em sincronia com worker.js
+
     function renderDetailWindow(d) {
       const w = d.revenueByWindow[detailWindow];
-      document.getElementById("detail-uptime").textContent = pct(w?.uptimePct);
-      document.getElementById("detail-util").textContent = pct(w?.utilizationPct);
-      document.getElementById("detail-revenue").textContent = w?.revenue ? brl(w.revenue) : "—";
+      const collecting = w && w.samples > 0 && w.samples < MIN_SAMPLES_FOR_ESTIMATE;
+      const label = collecting ? `coletando… (${w.samples}/${MIN_SAMPLES_FOR_ESTIMATE} amostras)` : null;
+      document.getElementById("detail-uptime").textContent = label || pct(w?.uptimePct);
+      document.getElementById("detail-util").textContent = label || pct(w?.utilizationPct);
+      document.getElementById("detail-revenue").textContent = label || (w?.revenue ? brl(w.revenue) : "—");
     }
 
     document.querySelectorAll(".detail-tab").forEach((btn) => {
