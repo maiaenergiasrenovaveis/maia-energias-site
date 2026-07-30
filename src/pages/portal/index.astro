@@ -49,7 +49,7 @@ import logo from "../../assets/logo.png";
         const pass = (document.getElementById("pass") as HTMLInputElement).value;
         if (user === VALID_USER && pass === VALID_PASS) {
           sessionStorage.setItem("maia-portal-auth", "1");
-          location.href = "/portal/hub";
+          location.href = "/hub";
         } else {
           document.getElementById("login-error")?.classList.remove("hidden");
         }

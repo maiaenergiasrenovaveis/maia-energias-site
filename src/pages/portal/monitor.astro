@@ -345,6 +345,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         renderAll();
         document.getElementById("loading-state").classList.add("hidden");
         document.getElementById("content").classList.remove("hidden");
+        if (map) setTimeout(() => map.invalidateSize(), 0);
       } catch (err) {
         console.error("Erro ao carregar eletropostos:", err);
         document.getElementById("loading-state").classList.add("hidden");

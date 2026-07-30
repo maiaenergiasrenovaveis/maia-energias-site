@@ -10,9 +10,9 @@ interface Props {
 const { title, active = "" } = Astro.props;
 
 const navItems = [
-  { key: "monitor", href: "/portal/monitor", label: "Monitor" },
-  { key: "locais", href: "/portal/locais", label: "Locais" },
-  { key: "simulador", href: "/portal/simulador", label: "Simulador ROI" },
+  { key: "monitor", href: "/monitor", label: "Monitor" },
+  { key: "locais", href: "/locais", label: "Locais" },
+  { key: "simulador", href: "/simulador", label: "Simulador ROI" },
 ];
 ---
 
@@ -29,7 +29,7 @@ const navItems = [
   <body class="bg-slate-50 text-maia-navy min-h-screen">
     <header class="bg-maia-navy text-white sticky top-0 z-50">
       <div class="mx-auto max-w-7xl px-4 flex items-center justify-between h-16">
-        <a href="/portal/hub" class="flex items-center gap-2.5">
+        <a href="/hub" class="flex items-center gap-2.5">
           <Image src={logoIcon} alt="" height={32} class="h-8 w-auto" />
           <span class="leading-tight">
             <span class="block text-sm font-bold">MAIA</span>
