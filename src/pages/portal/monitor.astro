@@ -71,6 +71,13 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         </div>
       </div>
 
+      <!-- Comparativo por região -->
+      <section class="mb-8">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-1">Comparativo por Região</h2>
+        <p class="text-xs text-slate-400 mb-4 pl-3">Agrupamento aproximado por proximidade — não são limites administrativos oficiais.</p>
+        <div id="region-cards" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"></div>
+      </section>
+
       <!-- Status breakdown -->
       <section class="mb-8 rounded-xl bg-white border border-slate-200 p-5">
         <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Status dos Conectores</h2>
@@ -82,10 +89,41 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
           <div>
             <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3">Mapa de Eletropostos — SP</h2>
-            <p class="text-xs text-slate-400 pl-3">Verde = operacional · Vermelho = com problema · Cinza = sem dado de conector</p>
+            <p class="text-xs text-slate-400 pl-3">Verde = operacional · Vermelho = com problema · Cinza = sem dado de conector · clique num ponto para detalhes</p>
           </div>
         </div>
         <div id="map" class="h-[420px] rounded-lg z-0"></div>
+      </section>
+
+      <!-- Top 10 -->
+      <section class="mb-8 rounded-xl bg-white border border-slate-200 p-5">
+        <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3">Top 10 Eletropostos — Faturamento Estimado</h2>
+          <div id="top10-tabs" class="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1">
+            <button data-window="24h" class="top10-tab px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600">24h</button>
+            <button data-window="7d" class="top10-tab px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600">7 dias</button>
+            <button data-window="15d" class="top10-tab px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600">15 dias</button>
+            <button data-window="30d" class="top10-tab px-3 py-1.5 rounded-md text-xs font-semibold bg-maia-green text-white">30 dias</button>
+            <button data-window="all" class="top10-tab px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600">Acumulado</button>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400 mb-3">Clique numa estação para ver detalhes. Receita estimada — veja metodologia abaixo.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-200">
+                <th class="py-2 pr-2">#</th>
+                <th class="py-2 pr-2">Posto</th>
+                <th class="py-2 pr-2">Região</th>
+                <th class="py-2 pr-2">Potência</th>
+                <th class="py-2 pr-2">Uso</th>
+                <th class="py-2 pr-2">Preço</th>
+                <th class="py-2 pr-2 text-right">Receita estimada</th>
+              </tr>
+            </thead>
+            <tbody id="top10-tbody"></tbody>
+          </table>
+        </div>
       </section>
 
       <!-- Rede breakdown -->
@@ -118,15 +156,17 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
           <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3">Estações</h2>
           <span id="stations-count" class="text-xs text-slate-400"></span>
         </div>
+        <p class="text-xs text-slate-400 mb-3">Clique numa linha para ver detalhes.</p>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
               <tr class="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-200">
                 <th class="py-2 pr-2">Posto</th>
                 <th class="py-2 pr-2">Rede</th>
+                <th class="py-2 pr-2">Região</th>
                 <th class="py-2 pr-2">Conectores</th>
                 <th class="py-2 pr-2">Status</th>
-                <th class="py-2 pr-2">Uso (24h)</th>
+                <th class="py-2 pr-2">Uso (30d)</th>
                 <th class="py-2 pr-2">Preço</th>
                 <th class="py-2 pr-2 text-right">Receita est. (30d)</th>
               </tr>
@@ -140,13 +180,75 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       <section class="rounded-xl bg-slate-100 p-5 text-xs text-slate-500 space-y-1.5">
         <p class="font-semibold text-slate-600 uppercase tracking-wide text-[11px] mb-2">Metodologia & Fontes</p>
         <p><strong>Fonte:</strong> endpoint público usado pelo mapa de eletropostos da Tupi (não documentado oficialmente; encontrado inspecionando o site público deles). Sem chave de API, sem contrato firmado — pode mudar ou parar de funcionar sem aviso.</p>
-        <p><strong>Filtro geográfico:</strong> estações dentro de uma caixa delimitadora aproximada do estado de SP (pode incluir alguns pontos de fronteira com estados vizinhos).</p>
+        <p><strong>Filtro geográfico:</strong> estações dentro de uma caixa delimitadora aproximada do estado de SP (pode incluir alguns pontos de fronteira com estados vizinhos). Regiões são agrupadas por proximidade a um ponto de referência, não por limite administrativo real.</p>
         <p><strong>"Sem dado":</strong> nem toda estação listada no mapa da Tupi tem telemetria de conector — cerca de 70% delas aparecem só como ponto no mapa (provavelmente cadastros não conectados ao monitoramento ao vivo deles), sem status/preço/receita possíveis de calcular. A lista de estações prioriza mostrar primeiro as que têm telemetria real.</p>
         <p><strong>Status:</strong> refletem o último estado sincronizado de cada conector (protocolo OCPP): Available, Charging, Preparing, Finishing, Reserved = operacional (sem falha); Faulted, Unavailable, SuspendedEV = com problema.</p>
         <p><strong>Operacional ≠ em uso:</strong> "operacional" inclui tanto Available (disponível, ocioso, sem ninguém carregando) quanto Charging (carregando de verdade). "Em uso" conta só o estado Charging — um posto pode estar 100% operacional (sem nenhuma falha) e 0% em uso.</p>
-        <p><strong>Atualização de status:</strong> um job agendado (a cada 5 min) salva um retrato do status de cada conector em um banco próprio, para calcular disponibilidade e uso ao longo do tempo (não só o instante atual).</p>
-        <p><strong>Preço e receita estimada:</strong> o preço por kWh vem do endpoint de detalhe de cada posto, coletado aos poucos (~20 postos a cada 5 min, cobertura completa em algumas horas) para não sobrecarregar o servidor da Tupi. A receita estimada de 30 dias = % de tempo <strong>em uso</strong> (Charging, últimas 24h) × 24h × potência (kW) × preço (R$/kWh) × 30 — é uma <strong>estimativa</strong>, não faturamento real auditado (não há dado de sessões/kWh efetivamente vendido nesta fonte).</p>
+        <p><strong>Atualização de status:</strong> um job agendado (a cada 5 min) salva um retrato do status de cada conector em um banco próprio, para calcular disponibilidade e uso ao longo do tempo (não só o instante atual). O histórico começou a ser coletado em 30/07/2026 — janelas maiores (7d, 15d, 30d) vão ficando mais precisas com o tempo.</p>
+        <p><strong>Preço e receita estimada:</strong> o preço por kWh vem do endpoint de detalhe de cada posto, coletado aos poucos (~20 postos a cada 5 min, cobertura completa em algumas horas) para não sobrecarregar o servidor da Tupi. Receita estimada = % de tempo <strong>em uso</strong> (Charging) na janela × horas da janela × potência (kW) × preço (R$/kWh) — é uma <strong>estimativa</strong>, não faturamento real auditado (não há dado de sessões/kWh efetivamente vendido nesta fonte).</p>
       </section>
+    </div>
+  </div>
+
+  <!-- Modal de detalhe -->
+  <div id="detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="flex items-start justify-between p-5 border-b border-slate-100">
+        <div>
+          <h3 id="detail-name" class="text-lg font-bold text-maia-navy"></h3>
+          <p id="detail-network" class="text-sm text-slate-500"></p>
+        </div>
+        <button id="detail-close" class="text-slate-400 hover:text-slate-600 text-xl leading-none">✕</button>
+      </div>
+      <div class="p-5">
+        <div id="detail-loading" class="text-center py-10 text-slate-400">Carregando...</div>
+        <div id="detail-body" class="hidden">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <div class="rounded-lg bg-slate-50 p-3 text-center">
+              <p id="detail-connectors" class="text-lg font-bold text-maia-navy"></p>
+              <p class="text-[11px] text-slate-500">conectores</p>
+            </div>
+            <div class="rounded-lg bg-slate-50 p-3 text-center">
+              <p id="detail-power" class="text-lg font-bold text-maia-navy"></p>
+              <p class="text-[11px] text-slate-500">potência total</p>
+            </div>
+            <div class="rounded-lg bg-slate-50 p-3 text-center">
+              <p id="detail-price" class="text-lg font-bold text-maia-navy"></p>
+              <p class="text-[11px] text-slate-500">preço/kWh</p>
+            </div>
+            <div class="rounded-lg bg-slate-50 p-3 text-center">
+              <p id="detail-idle" class="text-lg font-bold text-maia-navy"></p>
+              <p class="text-[11px] text-slate-500">taxa destrave/min</p>
+            </div>
+          </div>
+
+          <div id="detail-tabs" class="flex flex-wrap gap-1 bg-slate-100 rounded-lg p-1 mb-4 w-fit">
+            <button data-window="24h" class="detail-tab px-3 py-1.5 rounded-md text-xs font-semibold bg-maia-green text-white">24h</button>
+            <button data-window="7d" class="detail-tab px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600">7 dias</button>
+            <button data-window="15d" class="detail-tab px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600">15 dias</button>
+            <button data-window="30d" class="detail-tab px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600">30 dias</button>
+            <button data-window="all" class="detail-tab px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600">Acumulado</button>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+            <div class="rounded-lg border border-slate-200 p-3 text-center">
+              <p id="detail-uptime" class="text-lg font-bold text-maia-green"></p>
+              <p class="text-[11px] text-slate-500">tempo operacional</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-3 text-center">
+              <p id="detail-util" class="text-lg font-bold text-maia-blue"></p>
+              <p class="text-[11px] text-slate-500">tempo em uso</p>
+            </div>
+            <div class="rounded-lg border border-maia-green p-3 text-center bg-emerald-50">
+              <p id="detail-revenue" class="text-lg font-bold text-maia-green"></p>
+              <p class="text-[11px] text-slate-500">receita estimada</p>
+            </div>
+          </div>
+
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Carros carregando simultaneamente — últimas 24h</p>
+          <canvas id="detail-chart" height="120"></canvas>
+        </div>
+      </div>
     </div>
   </div>
 </PortalLayout>
@@ -161,9 +263,12 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
     const PROBLEM_STATES = new Set(["Faulted", "Unavailable", "SuspendedEV"]);
     const IN_USE_STATES = new Set(["Charging"]);
     const brl = (n) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+    const pct = (n) => (n === null || n === undefined ? "—" : Math.round(n * 100) + "%");
 
     let allStations = [];
-    let map, markersLayer, powerChart;
+    let allRegions = [];
+    let map, markersLayer, powerChart, detailChart;
+    let top10Window = "30d";
 
     function stationStatus(station) {
       const states = station.connectors.map((c) => c.state);
@@ -171,6 +276,11 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       if (states.some((s) => PROBLEM_STATES.has(s))) return "problema";
       if (states.every((s) => OPERATIONAL_STATES.has(s))) return "ok";
       return "unknown";
+    }
+
+    function stationUtilPct(s) {
+      const vals = s.connectors.map((c) => c.utilizationPctWindow).filter((v) => v !== null && v !== undefined);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
     }
 
     function currentFilters() {
@@ -206,6 +316,33 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       document.getElementById("kpi-operational").textContent = totalConnectors ? Math.round((ok / totalConnectors) * 100) + "%" : "—";
       document.getElementById("kpi-in-use").textContent = inUse.toLocaleString("pt-BR");
       document.getElementById("kpi-problem").textContent = problem.toLocaleString("pt-BR");
+    }
+
+    function renderRegionCards() {
+      const byRegion = {};
+      for (const r of allRegions) byRegion[r.code] = { name: r.name, estacoes: 0, conectores: 0, ok: 0, receita: 0 };
+      for (const s of allStations) {
+        const bucket = byRegion[s.regionCode];
+        if (!bucket) continue;
+        bucket.estacoes++;
+        for (const c of s.connectors) {
+          bucket.conectores++;
+          if (OPERATIONAL_STATES.has(c.state)) bucket.ok++;
+        }
+        if (s.estimatedRevenue) bucket.receita += s.estimatedRevenue;
+      }
+      const wrap = document.getElementById("region-cards");
+      wrap.innerHTML = Object.values(byRegion).map((r) => `
+        <div class="rounded-xl bg-white border-l-4 border-maia-navy p-4">
+          <p class="font-bold text-maia-navy text-sm">${r.name}</p>
+          <dl class="mt-3 space-y-1.5 text-xs">
+            <div class="flex justify-between"><dt class="text-slate-500">Estações</dt><dd class="font-semibold">${r.estacoes.toLocaleString("pt-BR")}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Conectores</dt><dd class="font-semibold">${r.conectores.toLocaleString("pt-BR")}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Operacional</dt><dd class="font-semibold">${r.conectores ? Math.round((r.ok / r.conectores) * 100) + "%" : "—"}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Receita est. (30d)</dt><dd class="font-semibold text-maia-green">${r.receita ? brl(r.receita) : "—"}</dd></div>
+          </dl>
+        </div>
+      `).join("");
     }
 
     function renderStatusBreakdown() {
@@ -255,12 +392,32 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       networkSelect.value = currentValue;
     }
 
+    function renderTop10() {
+      const ranked = allStations
+        .filter((s) => s.estimatedRevenue)
+        .sort((a, b) => b.estimatedRevenue - a.estimatedRevenue)
+        .slice(0, 10);
+      document.getElementById("top10-tbody").innerHTML = ranked.map((s, i) => {
+        const powerLabel = s.connectors.map((c) => `${c.power ?? "?"}kW`).join(", ");
+        const util = stationUtilPct(s);
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="window.__openStationDetail('${s.id}')">
+          <td class="py-2 pr-2 text-slate-400">${i + 1}</td>
+          <td class="py-2 pr-2 font-medium text-maia-navy">${s.network} | ${s.name}</td>
+          <td class="py-2 pr-2 text-slate-500">${s.regionName}</td>
+          <td class="py-2 pr-2 text-slate-500">${powerLabel}</td>
+          <td class="py-2 pr-2 font-semibold text-maia-blue">${pct(util)}</td>
+          <td class="py-2 pr-2 text-slate-500">${s.pricePerKwh ? "R$" + s.pricePerKwh.toFixed(2) + "/kWh" : "—"}</td>
+          <td class="py-2 pr-2 text-right font-semibold text-maia-green">${brl(s.estimatedRevenue)}</td>
+        </tr>`;
+      }).join("") || `<tr><td colspan="7" class="py-6 text-center text-slate-400">Ainda sem receita estimada suficiente para este período.</td></tr>`;
+    }
+
     function renderStationsTable() {
       const list = [...filteredStations()].sort((a, b) => {
         const aHasData = a.connectors.length > 0 ? 1 : 0;
         const bHasData = b.connectors.length > 0 ? 1 : 0;
         if (aHasData !== bHasData) return bHasData - aHasData;
-        return (b.estimatedRevenue30d || 0) - (a.estimatedRevenue30d || 0);
+        return (b.estimatedRevenue || 0) - (a.estimatedRevenue || 0);
       }).slice(0, 300);
       const withTelemetry = filteredStations().filter((s) => s.connectors.length > 0).length;
       document.getElementById("stations-count").textContent =
@@ -274,19 +431,19 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
             : '<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Sem dado</span>';
         const connectorSummary = s.connectors.length ? s.connectors.map((c) => `${c.power ?? "?"}kW`).join(", ") : "—";
         const priceLabel = s.pricePerKwh ? `R$${s.pricePerKwh.toFixed(2)}/kWh` : "—";
-        const revenueLabel = s.estimatedRevenue30d ? brl(s.estimatedRevenue30d) : "—";
-        const utilPcts = s.connectors.map((c) => c.utilizationPct24h).filter((p) => p !== null && p !== undefined);
-        const utilLabel = utilPcts.length ? Math.round((utilPcts.reduce((a, b) => a + b, 0) / utilPcts.length) * 100) + "%" : "—";
-        return `<tr class="border-b border-slate-100 hover:bg-slate-50">
+        const revenueLabel = s.estimatedRevenue ? brl(s.estimatedRevenue) : "—";
+        const util = stationUtilPct(s);
+        return `<tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="window.__openStationDetail('${s.id}')">
           <td class="py-2 pr-2 font-medium text-maia-navy">${s.name}</td>
           <td class="py-2 pr-2 text-slate-500">${s.network}</td>
+          <td class="py-2 pr-2 text-slate-500">${s.regionName}</td>
           <td class="py-2 pr-2 text-slate-500">${connectorSummary}</td>
           <td class="py-2 pr-2">${badge}</td>
-          <td class="py-2 pr-2 text-slate-500">${utilLabel}</td>
+          <td class="py-2 pr-2 text-slate-500">${pct(util)}</td>
           <td class="py-2 pr-2 text-slate-500">${priceLabel}</td>
-          <td class="py-2 pr-2 text-right font-semibold ${s.estimatedRevenue30d ? "text-maia-green" : "text-slate-300"}">${revenueLabel}</td>
+          <td class="py-2 pr-2 text-right font-semibold ${s.estimatedRevenue ? "text-maia-green" : "text-slate-300"}">${revenueLabel}</td>
         </tr>`;
-      }).join("") || `<tr><td colspan="7" class="py-6 text-center text-slate-400">Nenhuma estação encontrada.</td></tr>`;
+      }).join("") || `<tr><td colspan="8" class="py-6 text-center text-slate-400">Nenhuma estação encontrada.</td></tr>`;
     }
 
     function renderPowerChart() {
@@ -315,14 +472,16 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         const status = stationStatus(s);
         const color = status === "ok" ? "#5fa746" : status === "problema" ? "#ef4444" : "#94a3b8";
         L.circleMarker([s.lat, s.lng], { radius: 6, color, fillColor: color, fillOpacity: 0.85, weight: 1 })
-          .bindPopup(`<strong>${s.name}</strong><br>${s.network}<br>${s.connectors.map((c) => `${c.power ?? "?"}kW · ${c.state || "?"}`).join("<br>") || "sem dado de conector"}`)
+          .bindPopup(`<strong>${s.name}</strong><br>${s.network}<br>${s.connectors.map((c) => `${c.power ?? "?"}kW · ${c.state || "?"}`).join("<br>") || "sem dado de conector"}<br><a href="#" onclick="window.__openStationDetail('${s.id}');return false;">Ver detalhes →</a>`)
           .addTo(markersLayer);
       }
     }
 
     function renderAll() {
+      renderRegionCards();
       renderStatusBreakdown();
       renderNetworksTable();
+      renderTop10();
       renderStationsTable();
       renderPowerChart();
       renderMap();
@@ -333,15 +492,23 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
     });
     document.getElementById("refresh-btn").addEventListener("click", () => load());
 
-    async function load() {
-      document.getElementById("loading-state").classList.remove("hidden");
-      document.getElementById("error-state").classList.add("hidden");
-      document.getElementById("content").classList.add("hidden");
+    document.querySelectorAll(".top10-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        top10Window = btn.dataset.window;
+        document.querySelectorAll(".top10-tab").forEach((b) => { b.classList.remove("bg-maia-green", "text-white"); b.classList.add("text-slate-600"); });
+        btn.classList.add("bg-maia-green", "text-white");
+        btn.classList.remove("text-slate-600");
+        loadWindow(top10Window, false);
+      });
+    });
+
+    async function loadWindow(windowKey, isInitial) {
       try {
-        const res = await fetch("/portal/api/eletropostos-sp");
+        const res = await fetch("/portal/api/eletropostos-sp?window=" + windowKey);
         if (!res.ok) throw new Error("bad response");
         const data = await res.json();
         allStations = data.stations;
+        allRegions = data.regions || [];
         document.getElementById("last-updated").textContent = "Atualizado " + new Date(data.updatedAt).toLocaleString("pt-BR");
         document.getElementById("price-coverage").textContent = `${(data.priceCoverage || 0).toLocaleString("pt-BR")} de ${data.count.toLocaleString("pt-BR")} postos`;
         if (!map) {
@@ -349,17 +516,95 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
           L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
           markersLayer = L.layerGroup().addTo(map);
         }
-        renderKPIs();
+        if (isInitial) renderKPIs();
         renderAll();
-        document.getElementById("loading-state").classList.add("hidden");
-        document.getElementById("content").classList.remove("hidden");
-        if (map) setTimeout(() => map.invalidateSize(), 0);
+        if (isInitial) {
+          document.getElementById("loading-state").classList.add("hidden");
+          document.getElementById("content").classList.remove("hidden");
+          setTimeout(() => map.invalidateSize(), 0);
+        }
       } catch (err) {
         console.error("Erro ao carregar eletropostos:", err);
-        document.getElementById("loading-state").classList.add("hidden");
-        document.getElementById("error-state").classList.remove("hidden");
+        if (isInitial) {
+          document.getElementById("loading-state").classList.add("hidden");
+          document.getElementById("error-state").classList.remove("hidden");
+        }
       }
     }
+
+    function load() {
+      document.getElementById("loading-state").classList.remove("hidden");
+      document.getElementById("error-state").classList.add("hidden");
+      document.getElementById("content").classList.add("hidden");
+      loadWindow("30d", true);
+    }
+
+    // ---- Modal de detalhe ----
+    let detailWindow = "24h";
+    let currentDetailId = null;
+
+    async function loadDetail(id) {
+      document.getElementById("detail-loading").classList.remove("hidden");
+      document.getElementById("detail-body").classList.add("hidden");
+      const res = await fetch("/portal/api/eletropostos-sp/estacao?id=" + encodeURIComponent(id));
+      if (!res.ok) throw new Error("detail not found");
+      const d = await res.json();
+      document.getElementById("detail-name").textContent = d.name || "(sem nome)";
+      document.getElementById("detail-network").textContent = d.network;
+      document.getElementById("detail-connectors").textContent = d.connectorCount;
+      document.getElementById("detail-power").textContent = d.totalPowerKw + " kW";
+      document.getElementById("detail-price").textContent = d.pricePerKwh ? "R$" + d.pricePerKwh.toFixed(2) : "—";
+      document.getElementById("detail-idle").textContent = d.idleFeeValue ? "R$" + d.idleFeeValue.toFixed(2) : "—";
+
+      renderDetailWindow(d);
+
+      const labels = d.timeline24h.map((p) => new Date(p.t).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+      const values = d.timeline24h.map((p) => p.charging);
+      if (detailChart) detailChart.destroy();
+      detailChart = new Chart(document.getElementById("detail-chart"), {
+        type: "line",
+        data: { labels, datasets: [{ label: "Carros carregando", data: values, borderColor: "#0b3d62", backgroundColor: "rgba(11,61,98,0.08)", fill: true, stepped: true, pointRadius: 0 }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } },
+      });
+
+      d.__cache = d;
+      window.__currentDetail = d;
+      document.getElementById("detail-loading").classList.add("hidden");
+      document.getElementById("detail-body").classList.remove("hidden");
+    }
+
+    function renderDetailWindow(d) {
+      const w = d.revenueByWindow[detailWindow];
+      document.getElementById("detail-uptime").textContent = pct(w?.uptimePct);
+      document.getElementById("detail-util").textContent = pct(w?.utilizationPct);
+      document.getElementById("detail-revenue").textContent = w?.revenue ? brl(w.revenue) : "—";
+    }
+
+    document.querySelectorAll(".detail-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        detailWindow = btn.dataset.window;
+        document.querySelectorAll(".detail-tab").forEach((b) => { b.classList.remove("bg-maia-green", "text-white"); b.classList.add("text-slate-600"); });
+        btn.classList.add("bg-maia-green", "text-white");
+        btn.classList.remove("text-slate-600");
+        if (window.__currentDetail) renderDetailWindow(window.__currentDetail);
+      });
+    });
+
+    window.__openStationDetail = function (id) {
+      currentDetailId = id;
+      detailWindow = "24h";
+      document.querySelectorAll(".detail-tab").forEach((b) => { b.classList.remove("bg-maia-green", "text-white"); b.classList.add("text-slate-600"); });
+      document.querySelector('.detail-tab[data-window="24h"]').classList.add("bg-maia-green", "text-white");
+      document.getElementById("detail-modal").classList.remove("hidden");
+      loadDetail(id).catch((err) => {
+        console.error("Erro ao carregar detalhe:", err);
+        document.getElementById("detail-modal").classList.add("hidden");
+      });
+    };
+    document.getElementById("detail-close").addEventListener("click", () => document.getElementById("detail-modal").classList.add("hidden"));
+    document.getElementById("detail-modal").addEventListener("click", (e) => {
+      if (e.target.id === "detail-modal") document.getElementById("detail-modal").classList.add("hidden");
+    });
 
     load();
   })();
