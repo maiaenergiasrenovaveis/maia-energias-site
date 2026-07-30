@@ -57,6 +57,13 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         </div>
       </div>
 
+      <div class="rounded-xl bg-white border border-slate-200 p-4 mb-8 flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <p class="text-sm font-semibold text-maia-navy">Cobertura de preço: <span id="price-coverage" class="text-maia-orange-dark"></span></p>
+          <p class="text-xs text-slate-400 mt-0.5">O preço de cada posto é coletado aos poucos (~20 a cada 5 min) para não sobrecarregar o servidor da Tupi — leva algumas horas para cobrir todo o estado.</p>
+        </div>
+      </div>
+
       <!-- Status breakdown -->
       <section class="mb-8 rounded-xl bg-white border border-slate-200 p-5">
         <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Status dos Conectores</h2>
@@ -112,6 +119,8 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
                 <th class="py-2 pr-2">Rede</th>
                 <th class="py-2 pr-2">Conectores</th>
                 <th class="py-2 pr-2">Status</th>
+                <th class="py-2 pr-2">Preço</th>
+                <th class="py-2 pr-2 text-right">Receita est. (30d)</th>
               </tr>
             </thead>
             <tbody id="stations-tbody"></tbody>
@@ -125,8 +134,8 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <p><strong>Fonte:</strong> endpoint público usado pelo mapa de eletropostos da Tupi (não documentado oficialmente; encontrado inspecionando o site público deles). Sem chave de API, sem contrato firmado — pode mudar ou parar de funcionar sem aviso.</p>
         <p><strong>Filtro geográfico:</strong> estações dentro de uma caixa delimitadora aproximada do estado de SP (pode incluir alguns pontos de fronteira com estados vizinhos).</p>
         <p><strong>Status:</strong> refletem o último estado sincronizado de cada conector (protocolo OCPP): Available, Charging, Preparing, Finishing, Reserved = operacional; Faulted, Unavailable, SuspendedEV = com problema.</p>
-        <p><strong>Atualização:</strong> os dados são buscados a cada carregamento da página, com cache de 5 minutos no servidor para não sobrecarregar o serviço da Tupi.</p>
-        <p class="text-slate-400">Não há dado de faturamento/preço nesta fonte — para simulação financeira, use o Simulador de ROI.</p>
+        <p><strong>Atualização de status:</strong> um job agendado (a cada 5 min) salva um retrato do status de cada conector em um banco próprio, para calcular disponibilidade ao longo do tempo.</p>
+        <p><strong>Preço e receita estimada:</strong> o preço por kWh vem do endpoint de detalhe de cada posto, coletado aos poucos (~20 postos a cada 5 min, cobertura completa em algumas horas) para não sobrecarregar o servidor da Tupi. A receita estimada de 30 dias = % de tempo operacional (últimas 24h) × 24h × potência (kW) × preço (R$/kWh) × 30 — é uma <strong>estimativa</strong>, não faturamento real auditado (não há dado de sessões/kWh efetivamente vendido nesta fonte).</p>
       </section>
     </div>
   </div>
@@ -140,6 +149,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
   (function () {
     const OPERATIONAL_STATES = new Set(["Available", "Charging", "Preparing", "Finishing", "Reserved"]);
     const PROBLEM_STATES = new Set(["Faulted", "Unavailable", "SuspendedEV"]);
+    const brl = (n) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
     let allStations = [];
     let map, markersLayer, powerChart;
@@ -233,7 +243,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
     }
 
     function renderStationsTable() {
-      const list = filteredStations().slice(0, 300);
+      const list = [...filteredStations()].sort((a, b) => (b.estimatedRevenue30d || -1) - (a.estimatedRevenue30d || -1)).slice(0, 300);
       document.getElementById("stations-count").textContent = `${filteredStations().length.toLocaleString("pt-BR")} estação(ões)${filteredStations().length > 300 ? " — mostrando 300" : ""}`;
       document.getElementById("stations-tbody").innerHTML = list.map((s) => {
         const status = stationStatus(s);
@@ -243,13 +253,17 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
             ? '<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Com problema</span>'
             : '<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Sem dado</span>';
         const connectorSummary = s.connectors.length ? s.connectors.map((c) => `${c.power ?? "?"}kW`).join(", ") : "—";
+        const priceLabel = s.pricePerKwh ? `R$${s.pricePerKwh.toFixed(2)}/kWh` : "—";
+        const revenueLabel = s.estimatedRevenue30d ? brl(s.estimatedRevenue30d) : "—";
         return `<tr class="border-b border-slate-100 hover:bg-slate-50">
           <td class="py-2 pr-2 font-medium text-maia-navy">${s.name}</td>
           <td class="py-2 pr-2 text-slate-500">${s.network}</td>
           <td class="py-2 pr-2 text-slate-500">${connectorSummary}</td>
           <td class="py-2 pr-2">${badge}</td>
+          <td class="py-2 pr-2 text-slate-500">${priceLabel}</td>
+          <td class="py-2 pr-2 text-right font-semibold ${s.estimatedRevenue30d ? "text-maia-green" : "text-slate-300"}">${revenueLabel}</td>
         </tr>`;
-      }).join("") || `<tr><td colspan="4" class="py-6 text-center text-slate-400">Nenhuma estação encontrada.</td></tr>`;
+      }).join("") || `<tr><td colspan="6" class="py-6 text-center text-slate-400">Nenhuma estação encontrada.</td></tr>`;
     }
 
     function renderPowerChart() {
@@ -306,6 +320,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         const data = await res.json();
         allStations = data.stations;
         document.getElementById("last-updated").textContent = "Atualizado " + new Date(data.updatedAt).toLocaleString("pt-BR");
+        document.getElementById("price-coverage").textContent = `${(data.priceCoverage || 0).toLocaleString("pt-BR")} de ${data.count.toLocaleString("pt-BR")} postos`;
         if (!map) {
           map = L.map("map").setView([-22.6, -48.0], 7);
           L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);

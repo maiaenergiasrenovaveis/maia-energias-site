@@ -13,5 +13,15 @@
     { "pattern": "portal.maiaenergiasrenovaveis.com.br", "custom_domain": true },
     { "pattern": "maiaenergiasrenovaveis.com.br", "custom_domain": true },
     { "pattern": "www.maiaenergiasrenovaveis.com.br", "custom_domain": true }
-  ]
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "maia-eletropostos-db",
+      "database_id": "cceed314-92ab-41c2-8217-a18221c0b31f"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  }
 }
