@@ -26,7 +26,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
 
     <div id="content" class="hidden">
       <div class="flex flex-wrap items-center gap-3 mb-6">
-        <input id="search-input" placeholder="Buscar por nome do posto ou rede..." class="rounded-lg border border-slate-300 px-3 py-2 text-sm flex-1 min-w-[200px]" />
+        <input id="search-input" placeholder="🔍 Buscar posto ou rede (o mapa centraliza no resultado)..." class="rounded-lg border border-slate-300 px-3 py-2 text-sm flex-1 min-w-[220px]" />
         <select id="network-filter" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
           <option value="">Todas as redes</option>
         </select>
@@ -90,8 +90,9 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
           <div>
             <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3">Mapa de Eletropostos — SP</h2>
-            <p class="text-xs text-slate-400 pl-3">Verde = operacional · Vermelho = com problema · Cinza = sem dado de conector · clique num ponto para detalhes</p>
+            <p id="map-mode-hint" class="text-xs text-slate-400 pl-3">Verde = operacional · Vermelho = com problema · Cinza = sem dado de conector · clique num ponto para detalhes</p>
           </div>
+          <button id="heatmap-toggle" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 whitespace-nowrap">🔥 Mapa de calor</button>
         </div>
         <div id="map" class="h-[420px] rounded-lg z-0"></div>
       </section>
@@ -259,6 +260,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script is:inline src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script is:inline src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 
 <script is:inline>
@@ -271,7 +273,8 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
 
     let allStations = [];
     let allRegions = [];
-    let map, markersLayer, powerChart, detailChart;
+    let map, markersLayer, heatLayer, powerChart, detailChart;
+    let heatModeOn = false;
     let top10Window = "30d";
 
     function stationStatus(station) {
@@ -495,16 +498,67 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       });
     }
 
-    function renderMap() {
+    function renderMap(focusOnSearch) {
       markersLayer.clearLayers();
-      for (const s of filteredStations()) {
+      const list = filteredStations();
+      const bounds = [];
+      let singleMarker = null;
+      for (const s of list) {
         const status = stationStatus(s);
         const color = status === "ok" ? "#5fa746" : status === "problema" ? "#ef4444" : "#94a3b8";
-        L.circleMarker([s.lat, s.lng], { radius: 6, color, fillColor: color, fillOpacity: 0.85, weight: 1 })
+        const marker = L.circleMarker([s.lat, s.lng], { radius: 6, color, fillColor: color, fillOpacity: 0.85, weight: 1 })
           .bindPopup(`<strong>${s.name}</strong><br>${s.network}<br>${s.connectors.map((c) => `${connectorPowerLabel(c)} · ${c.state || "?"}`).join("<br>") || "sem dado de conector"}<br><a href="#" onclick="window.__openStationDetail('${s.id}');return false;">Ver detalhes →</a>`)
           .addTo(markersLayer);
+        bounds.push([s.lat, s.lng]);
+        if (list.length === 1) singleMarker = marker;
+      }
+
+      if (focusOnSearch) {
+        const searchVal = document.getElementById("search-input").value.trim();
+        if (!searchVal) {
+          map.setView([-22.6, -48.0], 7);
+        } else if (bounds.length === 1) {
+          map.setView(bounds[0], 15);
+          if (singleMarker) singleMarker.openPopup();
+        } else if (bounds.length > 1) {
+          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+        }
+      }
+
+      renderHeat(list);
+    }
+
+    function renderHeat(list) {
+      const points = list.map((s) => [s.lat, s.lng, Math.max(1, s.connectors.length)]);
+      if (heatLayer) {
+        heatLayer.setLatLngs(points);
+      } else {
+        heatLayer = L.heatLayer(points, { radius: 22, blur: 18, maxZoom: 12, max: 6 });
       }
     }
+
+    function setHeatMode(on) {
+      heatModeOn = on;
+      const btn = document.getElementById("heatmap-toggle");
+      const hint = document.getElementById("map-mode-hint");
+      if (on) {
+        map.removeLayer(markersLayer);
+        heatLayer.addTo(map);
+        btn.textContent = "📍 Ver postos";
+        btn.classList.add("bg-maia-orange-dark", "text-white");
+        btn.classList.remove("bg-slate-100", "text-slate-600");
+        hint.textContent = "Concentração de eletropostos — mais quente = mais postos na região. Clique em \"Ver postos\" para voltar aos pontos.";
+      } else {
+        if (map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
+        markersLayer.addTo(map);
+        btn.textContent = "🔥 Mapa de calor";
+        btn.classList.remove("bg-maia-orange-dark", "text-white");
+        btn.classList.add("bg-slate-100", "text-slate-600");
+        hint.textContent = "Verde = operacional · Vermelho = com problema · Cinza = sem dado de conector · clique num ponto para detalhes";
+      }
+    }
+
+    document.getElementById("heatmap-toggle").addEventListener("click", () => setHeatMode(!heatModeOn));
 
     function renderAll() {
       renderRegionCards();
@@ -516,7 +570,8 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       renderMap();
     }
 
-    ["search-input", "network-filter", "status-filter"].forEach((id) => {
+    document.getElementById("search-input").addEventListener("input", () => { renderStationsTable(); renderMap(true); });
+    ["network-filter", "status-filter"].forEach((id) => {
       document.getElementById(id).addEventListener("input", () => { renderStationsTable(); renderMap(); });
     });
     document.getElementById("refresh-btn").addEventListener("click", () => load());
@@ -544,6 +599,8 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
           map = L.map("map").setView([-22.6, -48.0], 7);
           L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
           markersLayer = L.layerGroup().addTo(map);
+          window.__map = map;
+          window.__markersLayer = markersLayer;
         }
         if (isInitial) renderKPIs();
         renderAll();
