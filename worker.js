@@ -364,9 +364,11 @@ async function handleStationDetail(request, env) {
   return new Response(JSON.stringify(detail), { headers: { "content-type": "application/json", "cache-control": "public, max-age=60" } });
 }
 
-// Headers de seguranca aplicados a toda resposta do Worker (site institucional,
-// portal e endpoints de API), sem alterar nenhuma logica de rotas existente.
-const CSP = [
+// Headers de seguranca aplicados a toda resposta do Worker. O portal (subdominio
+// portal.*) e uma ferramenta interna que depende de scripts inline e de CDNs
+// (Leaflet, Chart.js) e por isso usa uma CSP mais permissiva — o site
+// institucional publico mantem a CSP estrita original.
+const CSP_SITE = [
   "default-src 'self'",
   "script-src 'self' https://www.instagram.com",
   "style-src 'self' 'unsafe-inline'",
@@ -379,20 +381,32 @@ const CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
-const SECURITY_HEADERS = {
+const CSP_PORTAL = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline' https://unpkg.com",
+  "img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+const SECURITY_HEADERS_BASE = {
   "X-Frame-Options": "DENY",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Resource-Policy": "same-origin",
-  "Content-Security-Policy": CSP,
 };
 
-function withSecurityHeaders(response) {
+function withSecurityHeaders(response, hostname) {
   const headers = new Headers(response.headers);
-  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+  for (const [key, value] of Object.entries(SECURITY_HEADERS_BASE)) {
     headers.set(key, value);
   }
+  headers.set("Content-Security-Policy", hostname === "portal.maiaenergiasrenovaveis.com.br" ? CSP_PORTAL : CSP_SITE);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
@@ -429,7 +443,7 @@ async function handleFetch(request, env) {
 export default {
   async fetch(request, env) {
     const response = await handleFetch(request, env);
-    return withSecurityHeaders(response);
+    return withSecurityHeaders(response, new URL(request.url).hostname);
   },
 
   async scheduled(event, env, ctx) {
