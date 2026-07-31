@@ -21,6 +21,17 @@ const WINDOW_DAYS = { "24h": 1, "7d": 7, "15d": 15, "30d": 30, all: 30 };
 // Abaixo disso, a média de utilização é ruído estatístico (ex.: 1 leitura em
 // "Charging" vira "100% de uso") — não mostramos % nem receita até ter esse mínimo.
 const MIN_SAMPLES_FOR_ESTIMATE = 12;
+// Carregadores DC comerciais reais não passam disso hoje (~360kW é o teto do mercado).
+// Valores acima são erro de cadastro na própria Tupi (ex.: vários postos com
+// exatamente "480" em todos os conectores — claramente um placeholder/bug deles,
+// não potência real) — sinalizados na UI, mas não entram mais na conta de receita
+// (ver ENERGY_PER_HOUR_KWH abaixo).
+const MAX_PLAUSIBLE_POWER_KW = 400;
+// Nenhum carro sustenta a potência nominal do carregador por uma hora inteira (a
+// curva de carga cai bastante depois de ~80% de bateria) — por isso a receita usa
+// um consumo médio fixo por hora de uso, independente da potência do carregador,
+// igual à metodologia do Zeus Eletrik (referência usada para este portal).
+const ENERGY_PER_HOUR_KWH = 40;
 
 function chunk(arr, size) {
   const out = [];
@@ -213,6 +224,7 @@ async function buildEletropostosPayload(env, windowKey) {
       const enough = stats && stats.samples >= MIN_SAMPLES_FOR_ESTIMATE;
       return {
         power: c.power,
+        powerSuspicious: !!(c.power && c.power > MAX_PLAUSIBLE_POWER_KW),
         current: c.current,
         state: latest || null,
         inUseNow: latest ? IN_USE_STATES.has(latest) : null,
@@ -225,13 +237,14 @@ async function buildEletropostosPayload(env, windowKey) {
     const region = regionFor(s.lat, s.lng);
 
     // Receita estimada usa % de tempo REALMENTE carregando ("Charging"), não % de tempo
-    // apenas disponível/sem falha — disponível ocioso não gera receita.
+    // apenas disponível/sem falha — disponível ocioso não gera receita. O consumo por
+    // hora de uso é fixo (ENERGY_PER_HOUR_KWH), não a potência nominal do conector.
     let estimatedRevenue = null;
     if (pricing && pricing.price_per_kwh && connectors.length) {
       let sum = 0;
       for (const c of connectors) {
-        if (c.power && c.utilizationPctWindow !== null) {
-          sum += c.utilizationPctWindow * windowHours * (c.power || 0) * pricing.price_per_kwh;
+        if (c.utilizationPctWindow !== null) {
+          sum += c.utilizationPctWindow * windowHours * ENERGY_PER_HOUR_KWH * pricing.price_per_kwh;
         }
       }
       estimatedRevenue = sum > 0 ? Math.round(sum) : null;
@@ -285,7 +298,8 @@ async function buildStationDetail(env, stationId) {
   if (!stationRow) return null;
 
   const totalConnectors = connectorsRes.results.length;
-  const totalPowerKw = connectorsRes.results.reduce((acc, c) => acc + (c.power || 0), 0);
+  const hasSuspiciousPower = connectorsRes.results.some((c) => c.power && c.power > MAX_PLAUSIBLE_POWER_KW);
+  const totalPowerKw = connectorsRes.results.reduce((acc, c) => acc + (c.power && c.power <= MAX_PLAUSIBLE_POWER_KW ? c.power : 0), 0);
 
   const revenueByWindow = {};
   for (const key of Object.keys(WINDOW_DAYS)) {
@@ -302,8 +316,11 @@ async function buildStationDetail(env, stationId) {
     const hours = days * 24;
     const enough = stats && stats.samples >= MIN_SAMPLES_FOR_ESTIMATE;
     let revenue = null;
-    if (enough && pricingRow?.price_per_kwh && totalPowerKw) {
-      revenue = Math.round(stats.utilization_pct * hours * totalPowerKw * pricingRow.price_per_kwh);
+    if (enough && pricingRow?.price_per_kwh && totalConnectors) {
+      // utilization_pct é a média entre conectores; multiplica por totalConnectors para
+      // voltar a "conector-horas em uso" e por ENERGY_PER_HOUR_KWH (não pela potência
+      // nominal, que pode estar errada no cadastro da Tupi — ver MAX_PLAUSIBLE_POWER_KW).
+      revenue = Math.round(stats.utilization_pct * totalConnectors * hours * ENERGY_PER_HOUR_KWH * pricingRow.price_per_kwh);
     }
     revenueByWindow[key] = {
       revenue,
@@ -321,6 +338,7 @@ async function buildStationDetail(env, stationId) {
     lng: stationRow.lng,
     connectorCount: totalConnectors,
     totalPowerKw,
+    hasSuspiciousPower,
     pricePerKwh: pricingRow?.price_per_kwh ?? null,
     idleFeeValue: pricingRow?.idle_fee_enabled ? pricingRow.idle_fee_value : null,
     revenueByWindow,

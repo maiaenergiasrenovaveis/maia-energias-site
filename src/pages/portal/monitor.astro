@@ -148,6 +148,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       <section class="mb-8 rounded-xl bg-white border border-slate-200 p-5">
         <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Potência dos Conectores</h2>
         <canvas id="powerChart" height="90"></canvas>
+        <p id="power-chart-note" class="text-xs text-amber-600 mt-2"></p>
       </section>
 
       <!-- Lista de estações -->
@@ -185,7 +186,8 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <p><strong>Status:</strong> refletem o último estado sincronizado de cada conector (protocolo OCPP): Available, Charging, Preparing, Finishing, Reserved = operacional (sem falha); Faulted, Unavailable, SuspendedEV = com problema.</p>
         <p><strong>Operacional ≠ em uso:</strong> "operacional" inclui tanto Available (disponível, ocioso, sem ninguém carregando) quanto Charging (carregando de verdade). "Em uso" conta só o estado Charging — um posto pode estar 100% operacional (sem nenhuma falha) e 0% em uso.</p>
         <p><strong>Atualização de status:</strong> um job agendado (a cada 5 min) salva um retrato do status de cada conector em um banco próprio, para calcular disponibilidade e uso ao longo do tempo (não só o instante atual). O histórico começou a ser coletado em 30/07/2026 — janelas maiores (7d, 15d, 30d) vão ficando mais precisas com o tempo.</p>
-        <p><strong>Preço e receita estimada:</strong> o preço por kWh vem do endpoint de detalhe de cada posto, coletado aos poucos (~20 postos a cada 5 min, cobertura completa em algumas horas) para não sobrecarregar o servidor da Tupi. Receita estimada = % de tempo <strong>em uso</strong> (Charging) na janela × horas da janela × potência (kW) × preço (R$/kWh) — é uma <strong>estimativa</strong>, não faturamento real auditado (não há dado de sessões/kWh efetivamente vendido nesta fonte).</p>
+        <p><strong>Preço e receita estimada:</strong> o preço por kWh vem do endpoint de detalhe de cada posto, coletado aos poucos (~20 postos a cada 5 min, cobertura completa em algumas horas) para não sobrecarregar o servidor da Tupi. Receita estimada = horas em uso (Charging) na janela × <strong>40 kWh por hora de uso</strong> (consumo médio realista de recarga — nenhum carro sustenta a potência nominal do carregador por uma hora inteira, a curva de carga cai bastante depois de ~80% de bateria) × preço (R$/kWh). Não usamos a potência nominal cadastrada na fórmula, propositalmente. É uma <strong>estimativa</strong>, não faturamento real auditado (não há dado de sessões/kWh efetivamente vendido nesta fonte).</p>
+        <p><strong>Potência com ⚠️:</strong> alguns postos têm potência cadastrada claramente errada na própria Tupi (ex.: vários postos diferentes com exatamente "480kW" em todos os conectores — um valor de placeholder/bug do cadastro deles, não uma leitura real). Sinalizamos com ⚠️ e excluímos esses valores dos totais e do gráfico de potência.</p>
         <p><strong>Janelas maiores (7d/15d/30d/Acumulado) são projeções, não dado acumulado real</strong> enquanto o histórico for curto: pegamos a taxa de uso média já observada e projetamos para o tamanho da janela. Só mostramos % e receita quando há pelo menos 12 leituras (1h) para aquele conector — abaixo disso aparece "coletando…", para não exibir números como "100% de uso" que seriam só ruído de amostra pequena (ex.: 1 leitura que por acaso pegou o carregador em uso).</p>
       </section>
     </div>
@@ -211,7 +213,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
             </div>
             <div class="rounded-lg bg-slate-50 p-3 text-center">
               <p id="detail-power" class="text-lg font-bold text-maia-navy"></p>
-              <p class="text-[11px] text-slate-500">potência total</p>
+              <p id="detail-power-note" class="text-[11px] text-slate-500">potência total</p>
             </div>
             <div class="rounded-lg bg-slate-50 p-3 text-center">
               <p id="detail-price" class="text-lg font-bold text-maia-navy"></p>
@@ -292,6 +294,11 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       if (val !== null) return pct(val);
       const hasSamples = s.connectors.some((c) => (c.samples || 0) > 0);
       return hasSamples ? "coletando…" : "—";
+    }
+
+    function connectorPowerLabel(c) {
+      if (c.power === null || c.power === undefined) return "?kW";
+      return c.powerSuspicious ? `${c.power}kW ⚠️` : `${c.power}kW`;
     }
 
     function currentFilters() {
@@ -409,7 +416,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         .sort((a, b) => b.estimatedRevenue - a.estimatedRevenue)
         .slice(0, 10);
       document.getElementById("top10-tbody").innerHTML = ranked.map((s, i) => {
-        const powerLabel = s.connectors.map((c) => `${c.power ?? "?"}kW`).join(", ");
+        const powerLabel = s.connectors.map(connectorPowerLabel).join(", ");
         return `<tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="window.__openStationDetail('${s.id}')">
           <td class="py-2 pr-2 text-slate-400">${i + 1}</td>
           <td class="py-2 pr-2 font-medium text-maia-navy">${s.network} | ${s.name}</td>
@@ -439,7 +446,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
           : status === "problema"
             ? '<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Com problema</span>'
             : '<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Sem dado</span>';
-        const connectorSummary = s.connectors.length ? s.connectors.map((c) => `${c.power ?? "?"}kW`).join(", ") : "—";
+        const connectorSummary = s.connectors.length ? s.connectors.map(connectorPowerLabel).join(", ") : "—";
         const priceLabel = s.pricePerKwh ? `R$${s.pricePerKwh.toFixed(2)}/kWh` : "—";
         const revenueLabel = s.estimatedRevenue ? brl(s.estimatedRevenue) : "—";
         return `<tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="window.__openStationDetail('${s.id}')">
@@ -456,17 +463,21 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
     }
 
     function renderPowerChart() {
-      const buckets = { "≤30 kW": 0, "40 kW": 0, "60 kW": 0, "80-120 kW": 0, "≥150 kW": 0 };
+      const buckets = { "≤30 kW": 0, "40 kW": 0, "60 kW": 0, "80-120 kW": 0, "150-360 kW": 0 };
+      let excluded = 0;
       for (const s of allStations) {
         for (const c of s.connectors) {
+          if (c.powerSuspicious) { excluded++; continue; }
           const p = c.power || 0;
           if (p <= 30) buckets["≤30 kW"]++;
           else if (p <= 45) buckets["40 kW"]++;
           else if (p <= 70) buckets["60 kW"]++;
           else if (p <= 120) buckets["80-120 kW"]++;
-          else buckets["≥150 kW"]++;
+          else buckets["150-360 kW"]++;
         }
       }
+      const note = document.getElementById("power-chart-note");
+      if (note) note.textContent = excluded > 0 ? `${excluded} conector(es) com potência cadastrada implausível (>400kW, provável erro da Tupi) excluído(s) deste gráfico.` : "";
       if (powerChart) powerChart.destroy();
       powerChart = new Chart(document.getElementById("powerChart"), {
         type: "bar",
@@ -481,7 +492,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         const status = stationStatus(s);
         const color = status === "ok" ? "#5fa746" : status === "problema" ? "#ef4444" : "#94a3b8";
         L.circleMarker([s.lat, s.lng], { radius: 6, color, fillColor: color, fillOpacity: 0.85, weight: 1 })
-          .bindPopup(`<strong>${s.name}</strong><br>${s.network}<br>${s.connectors.map((c) => `${c.power ?? "?"}kW · ${c.state || "?"}`).join("<br>") || "sem dado de conector"}<br><a href="#" onclick="window.__openStationDetail('${s.id}');return false;">Ver detalhes →</a>`)
+          .bindPopup(`<strong>${s.name}</strong><br>${s.network}<br>${s.connectors.map((c) => `${connectorPowerLabel(c)} · ${c.state || "?"}`).join("<br>") || "sem dado de conector"}<br><a href="#" onclick="window.__openStationDetail('${s.id}');return false;">Ver detalhes →</a>`)
           .addTo(markersLayer);
       }
     }
@@ -561,7 +572,8 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       document.getElementById("detail-name").textContent = d.name || "(sem nome)";
       document.getElementById("detail-network").textContent = d.network;
       document.getElementById("detail-connectors").textContent = d.connectorCount;
-      document.getElementById("detail-power").textContent = d.totalPowerKw + " kW";
+      document.getElementById("detail-power").textContent = d.totalPowerKw + " kW" + (d.hasSuspiciousPower ? " ⚠️" : "");
+      document.getElementById("detail-power-note").textContent = d.hasSuspiciousPower ? "potência total (exclui conector com valor implausível)" : "potência total";
       document.getElementById("detail-price").textContent = d.pricePerKwh ? "R$" + d.pricePerKwh.toFixed(2) : "—";
       document.getElementById("detail-idle").textContent = d.idleFeeValue ? "R$" + d.idleFeeValue.toFixed(2) : "—";
 
