@@ -25,17 +25,6 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
     <div id="error-state" class="hidden text-center py-16 text-red-500">Não foi possível carregar os dados agora. Tente atualizar em instantes.</div>
 
     <div id="content" class="hidden">
-      <div class="flex flex-wrap items-center gap-3 mb-6">
-        <select id="network-filter" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Todas as redes</option>
-        </select>
-        <select id="status-filter" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Qualquer status</option>
-          <option value="ok">Operacional</option>
-          <option value="problema">Com problema</option>
-        </select>
-      </div>
-
       <!-- KPIs -->
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-2">
         <div class="rounded-xl bg-white border border-slate-200 p-5">
@@ -93,8 +82,18 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
           </div>
           <button id="heatmap-toggle" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 whitespace-nowrap">🔥 Mapa de calor</button>
         </div>
-        <div class="relative mb-3">
+        <div class="mb-3">
           <input id="search-input" placeholder="🔍 Buscar posto, rede, rua ou estabelecimento..." class="rounded-lg border border-slate-300 px-3 py-2 text-sm w-full" />
+          <div class="flex flex-wrap items-center gap-3 mt-2">
+            <select id="network-filter" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              <option value="">Todas as redes</option>
+            </select>
+            <select id="status-filter" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              <option value="">Qualquer status</option>
+              <option value="ok">Operacional</option>
+              <option value="problema">Com problema</option>
+            </select>
+          </div>
           <p id="search-status" class="text-xs text-slate-400 mt-1"></p>
         </div>
         <div id="map" class="h-[420px] rounded-lg z-0"></div>
