@@ -366,12 +366,26 @@ async function handleStationDetail(request, env) {
 
 // Headers de seguranca aplicados a toda resposta do Worker (site institucional,
 // portal e endpoints de API), sem alterar nenhuma logica de rotas existente.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' https://www.instagram.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https://*.cdninstagram.com https://*.fbcdn.net",
+  "frame-src https://www.youtube.com https://www.instagram.com",
+  "connect-src 'self' https://www.instagram.com",
+  "font-src 'self'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Resource-Policy": "same-origin",
+  "Content-Security-Policy": CSP,
 };
 
 function withSecurityHeaders(response) {
