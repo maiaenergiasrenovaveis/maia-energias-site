@@ -316,10 +316,11 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       };
     }
 
-    function filteredStations() {
+    function filteredStations(opts) {
       const f = currentFilters();
+      const ignoreSearch = opts && opts.ignoreSearch;
       return allStations.filter((s) => {
-        if (f.search && !s.name.toLowerCase().includes(f.search) && !s.network.toLowerCase().includes(f.search)) return false;
+        if (!ignoreSearch && f.search && !s.name.toLowerCase().includes(f.search) && !s.network.toLowerCase().includes(f.search)) return false;
         if (f.network && s.network !== f.network) return false;
         if (f.status && stationStatus(s) !== f.status) return false;
         return true;
@@ -502,8 +503,15 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
     }
 
     function renderMap(focusOnSearch) {
+      const searchVal = document.getElementById("search-input").value.trim();
+      const textMatches = filteredStations();
+      // Se a busca não bateu com nenhum posto (provável endereço/estabelecimento),
+      // mantém todos os postos visíveis no mapa (só respeitando rede/status) em vez de
+      // esvaziar o mapa — o objetivo de buscar um endereço é ver o que tem AO REDOR dele.
+      const isGeocodeFallback = focusOnSearch && searchVal && textMatches.length === 0;
+      const list = isGeocodeFallback ? filteredStations({ ignoreSearch: true }) : textMatches;
+
       markersLayer.clearLayers();
-      const list = filteredStations();
       const bounds = [];
       let singleMarker = null;
       for (const s of list) {
@@ -512,14 +520,17 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         const marker = L.circleMarker([s.lat, s.lng], { radius: 6, color, fillColor: color, fillOpacity: 0.85, weight: 1 })
           .bindPopup(`<strong>${s.name}</strong><br>${s.network}<br>${s.connectors.map((c) => `${connectorPowerLabel(c)} · ${c.state || "?"}`).join("<br>") || "sem dado de conector"}<br><a href="#" onclick="window.__openStationDetail('${s.id}');return false;">Ver detalhes →</a>`)
           .addTo(markersLayer);
-        bounds.push([s.lat, s.lng]);
-        if (list.length === 1) singleMarker = marker;
+        if (!isGeocodeFallback) {
+          bounds.push([s.lat, s.lng]);
+          if (list.length === 1) singleMarker = marker;
+        }
       }
 
       if (focusOnSearch) {
-        const searchVal = document.getElementById("search-input").value.trim();
         if (!searchVal) {
           map.setView([-22.6, -48.0], 7);
+        } else if (isGeocodeFallback) {
+          // Centralização fica a cargo do tryGeocode() (assíncrono) — não mexe na vista aqui.
         } else if (bounds.length === 1) {
           map.setView(bounds[0], 15);
           if (singleMarker) singleMarker.openPopup();
