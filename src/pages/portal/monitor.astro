@@ -46,6 +46,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Conectores monitorados</p>
           <p id="kpi-connectors" class="mt-1 text-3xl font-bold text-maia-navy"></p>
+          <p id="kpi-connectors-acdc" class="text-[11px] text-slate-400 mt-1"></p>
         </div>
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Operacionais agora</p>
@@ -321,16 +322,19 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
 
     function renderKPIs() {
       const totalConnectors = allStations.reduce((acc, s) => acc + s.connectors.length, 0);
-      let ok = 0, problem = 0, inUse = 0;
+      let ok = 0, problem = 0, inUse = 0, ac = 0, dc = 0;
       for (const s of allStations) {
         for (const c of s.connectors) {
           if (OPERATIONAL_STATES.has(c.state)) ok++;
           else if (PROBLEM_STATES.has(c.state)) problem++;
           if (IN_USE_STATES.has(c.state)) inUse++;
+          if (c.current === "AC") ac++;
+          else if (c.current === "DC") dc++;
         }
       }
       document.getElementById("kpi-stations").textContent = allStations.length.toLocaleString("pt-BR");
       document.getElementById("kpi-connectors").textContent = totalConnectors.toLocaleString("pt-BR");
+      document.getElementById("kpi-connectors-acdc").textContent = `AC: ${ac.toLocaleString("pt-BR")} · DC: ${dc.toLocaleString("pt-BR")}`;
       document.getElementById("kpi-operational").textContent = totalConnectors ? Math.round((ok / totalConnectors) * 100) + "%" : "—";
       document.getElementById("kpi-in-use").textContent = inUse.toLocaleString("pt-BR");
       document.getElementById("kpi-problem").textContent = problem.toLocaleString("pt-BR");
@@ -338,13 +342,16 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
 
     function renderRegionCards() {
       const byRegion = {};
-      for (const r of allRegions) byRegion[r.code] = { name: r.name, estacoes: 0, conectores: 0, ok: 0, receita: 0 };
+      for (const r of allRegions) byRegion[r.code] = { name: r.name, estacoes: 0, estacoesComTelemetria: 0, conectores: 0, ac: 0, dc: 0, ok: 0, receita: 0 };
       for (const s of allStations) {
         const bucket = byRegion[s.regionCode];
         if (!bucket) continue;
         bucket.estacoes++;
+        if (s.connectors.length > 0) bucket.estacoesComTelemetria++;
         for (const c of s.connectors) {
           bucket.conectores++;
+          if (c.current === "AC") bucket.ac++;
+          else if (c.current === "DC") bucket.dc++;
           if (OPERATIONAL_STATES.has(c.state)) bucket.ok++;
         }
         if (s.estimatedRevenue) bucket.receita += s.estimatedRevenue;
@@ -355,7 +362,9 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
           <p class="font-bold text-maia-navy text-sm">${r.name}</p>
           <dl class="mt-3 space-y-1.5 text-xs">
             <div class="flex justify-between"><dt class="text-slate-500">Estações</dt><dd class="font-semibold">${r.estacoes.toLocaleString("pt-BR")}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-400 pl-2">— com telemetria</dt><dd class="text-slate-400">${r.estacoesComTelemetria.toLocaleString("pt-BR")}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">Conectores</dt><dd class="font-semibold">${r.conectores.toLocaleString("pt-BR")}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-400 pl-2">— AC / DC</dt><dd class="text-slate-400">${r.ac.toLocaleString("pt-BR")} / ${r.dc.toLocaleString("pt-BR")}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">Operacional</dt><dd class="font-semibold">${r.conectores ? Math.round((r.ok / r.conectores) * 100) + "%" : "—"}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">Receita est. (30d)</dt><dd class="font-semibold text-maia-green">${r.receita ? brl(r.receita) : "—"}</dd></div>
           </dl>
