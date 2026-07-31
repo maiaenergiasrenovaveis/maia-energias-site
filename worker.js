@@ -364,35 +364,58 @@ async function handleStationDetail(request, env) {
   return new Response(JSON.stringify(detail), { headers: { "content-type": "application/json", "cache-control": "public, max-age=60" } });
 }
 
+// Headers de seguranca aplicados a toda resposta do Worker (site institucional,
+// portal e endpoints de API), sem alterar nenhuma logica de rotas existente.
+const SECURITY_HEADERS = {
+  "X-Frame-Options": "DENY",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Resource-Policy": "same-origin",
+};
+
+function withSecurityHeaders(response) {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    headers.set(key, value);
+  }
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+async function handleFetch(request, env) {
+  const url = new URL(request.url);
+
+  if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/eletropostos-sp") {
+    try {
+      return await handleEletropostosSP(request, env);
+    } catch (err) {
+      return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { "content-type": "application/json" } });
+    }
+  }
+
+  if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/eletropostos-sp/estacao") {
+    try {
+      return await handleStationDetail(request, env);
+    } catch (err) {
+      return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { "content-type": "application/json" } });
+    }
+  }
+
+  const lastSegment = url.pathname.split("/").pop() ?? "";
+  const isStaticAsset = lastSegment.includes(".");
+
+  if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && !isStaticAsset && !url.pathname.startsWith("/portal")) {
+    url.pathname = url.pathname === "/" ? "/portal" : "/portal" + url.pathname;
+    return env.ASSETS.fetch(new Request(url, request));
+  }
+
+  return env.ASSETS.fetch(request);
+}
+
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url);
-
-    if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/eletropostos-sp") {
-      try {
-        return await handleEletropostosSP(request, env);
-      } catch (err) {
-        return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { "content-type": "application/json" } });
-      }
-    }
-
-    if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/eletropostos-sp/estacao") {
-      try {
-        return await handleStationDetail(request, env);
-      } catch (err) {
-        return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { "content-type": "application/json" } });
-      }
-    }
-
-    const lastSegment = url.pathname.split("/").pop() ?? "";
-    const isStaticAsset = lastSegment.includes(".");
-
-    if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && !isStaticAsset && !url.pathname.startsWith("/portal")) {
-      url.pathname = url.pathname === "/" ? "/portal" : "/portal" + url.pathname;
-      return env.ASSETS.fetch(new Request(url, request));
-    }
-
-    return env.ASSETS.fetch(request);
+    const response = await handleFetch(request, env);
+    return withSecurityHeaders(response);
   },
 
   async scheduled(event, env, ctx) {
