@@ -364,6 +364,27 @@ async function handleStationDetail(request, env) {
   return new Response(JSON.stringify(detail), { headers: { "content-type": "application/json", "cache-control": "public, max-age=60" } });
 }
 
+// Geocodificação de ruas/estabelecimentos via Nominatim (OpenStreetMap), usada como
+// complemento quando a busca não encontra nenhum posto pelo nome. Proxied pelo Worker
+// para poder mandar um User-Agent identificável (exigido pela politica de uso deles)
+// e não precisar liberar dominio externo na CSP do navegador.
+async function handleGeocode(request, env) {
+  const url = new URL(request.url);
+  const q = (url.searchParams.get("q") || "").trim();
+  if (!q) return new Response(JSON.stringify({ results: [] }), { headers: { "content-type": "application/json" } });
+
+  const viewbox = `${SP_BOUNDS.lngMin},${SP_BOUNDS.latMax},${SP_BOUNDS.lngMax},${SP_BOUNDS.latMin}`;
+  const nominatimUrl =
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=3&countrycodes=br&viewbox=${viewbox}&q=${encodeURIComponent(q)}`;
+  const res = await fetch(nominatimUrl, { headers: { "User-Agent": FETCH_HEADERS["User-Agent"] } });
+  if (!res.ok) return new Response(JSON.stringify({ results: [] }), { headers: { "content-type": "application/json" } });
+  const data = await res.json();
+  const results = data.map((r) => ({ label: r.display_name, lat: parseFloat(r.lat), lng: parseFloat(r.lon) }));
+  return new Response(JSON.stringify({ results }), {
+    headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" },
+  });
+}
+
 // Headers de seguranca aplicados a toda resposta do Worker. O portal (subdominio
 // portal.*) e uma ferramenta interna que depende de scripts inline e de CDNs
 // (Leaflet, Chart.js) e por isso usa uma CSP mais permissiva — o site
@@ -424,6 +445,14 @@ async function handleFetch(request, env) {
   if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/eletropostos-sp/estacao") {
     try {
       return await handleStationDetail(request, env);
+    } catch (err) {
+      return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { "content-type": "application/json" } });
+    }
+  }
+
+  if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/geocode") {
+    try {
+      return await handleGeocode(request, env);
     } catch (err) {
       return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { "content-type": "application/json" } });
     }

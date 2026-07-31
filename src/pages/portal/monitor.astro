@@ -26,7 +26,6 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
 
     <div id="content" class="hidden">
       <div class="flex flex-wrap items-center gap-3 mb-6">
-        <input id="search-input" placeholder="🔍 Buscar posto ou rede (o mapa centraliza no resultado)..." class="rounded-lg border border-slate-300 px-3 py-2 text-sm flex-1 min-w-[220px]" />
         <select id="network-filter" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
           <option value="">Todas as redes</option>
         </select>
@@ -93,6 +92,10 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
             <p id="map-mode-hint" class="text-xs text-slate-400 pl-3">Verde = operacional · Vermelho = com problema · Cinza = sem dado de conector · clique num ponto para detalhes</p>
           </div>
           <button id="heatmap-toggle" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 whitespace-nowrap">🔥 Mapa de calor</button>
+        </div>
+        <div class="relative mb-3">
+          <input id="search-input" placeholder="🔍 Buscar posto, rede, rua ou estabelecimento..." class="rounded-lg border border-slate-300 px-3 py-2 text-sm w-full" />
+          <p id="search-status" class="text-xs text-slate-400 mt-1"></p>
         </div>
         <div id="map" class="h-[420px] rounded-lg z-0"></div>
       </section>
@@ -273,7 +276,8 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
 
     let allStations = [];
     let allRegions = [];
-    let map, markersLayer, heatLayer, powerChart, detailChart;
+    let map, markersLayer, heatLayer, geocodeMarker, powerChart, detailChart;
+    let geocodeTimer = null;
     let heatModeOn = false;
     let top10Window = "30d";
 
@@ -570,7 +574,48 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       renderMap();
     }
 
-    document.getElementById("search-input").addEventListener("input", () => { renderStationsTable(); renderMap(true); });
+    function clearGeocodeMarker() {
+      if (geocodeMarker) { map.removeLayer(geocodeMarker); geocodeMarker = null; }
+      document.getElementById("search-status").textContent = "";
+    }
+
+    async function tryGeocode(query) {
+      const status = document.getElementById("search-status");
+      status.textContent = "Buscando endereço/estabelecimento…";
+      try {
+        const res = await fetch("/portal/api/geocode?q=" + encodeURIComponent(query));
+        const data = await res.json();
+        // A busca pode ter mudado enquanto o geocode rodava — ignora resultado desatualizado.
+        if (document.getElementById("search-input").value.trim() !== query) return;
+        if (!data.results || data.results.length === 0) {
+          status.textContent = `Nenhum posto, rua ou estabelecimento encontrado para "${query}".`;
+          return;
+        }
+        const r = data.results[0];
+        clearGeocodeMarker();
+        geocodeMarker = L.marker([r.lat, r.lng], {
+          icon: L.divIcon({ className: "", html: '<div style="font-size:28px;line-height:1">📍</div>', iconSize: [28, 28], iconAnchor: [14, 28] }),
+        }).bindPopup(`<strong>${r.label}</strong><br><span style="color:#94a3b8">Resultado de endereço (OpenStreetMap) — pode não ter eletroposto.</span>`).addTo(map);
+        map.setView([r.lat, r.lng], 16);
+        geocodeMarker.openPopup();
+        status.textContent = `📍 ${r.label}`;
+      } catch (err) {
+        console.error("Erro ao geocodificar:", err);
+        status.textContent = "Não foi possível buscar o endereço agora.";
+      }
+    }
+
+    document.getElementById("search-input").addEventListener("input", () => {
+      renderStationsTable();
+      renderMap(true);
+      clearTimeout(geocodeTimer);
+      const query = document.getElementById("search-input").value.trim();
+      clearGeocodeMarker();
+      if (!query) return;
+      const hasStationMatch = filteredStations().length > 0;
+      if (hasStationMatch) return;
+      geocodeTimer = setTimeout(() => tryGeocode(query), 600);
+    });
     ["network-filter", "status-filter"].forEach((id) => {
       document.getElementById(id).addEventListener("input", () => { renderStationsTable(); renderMap(); });
     });
