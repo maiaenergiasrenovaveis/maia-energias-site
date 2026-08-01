@@ -53,10 +53,17 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       </div>
       <p class="text-xs text-slate-400 mb-6">"Operacional" = sem falha detectada (pode estar ocioso/disponível ou carregando). "Em uso" = carregando de verdade neste momento — os dois números são diferentes de propósito.</p>
 
-      <div class="rounded-xl bg-white border border-slate-200 p-4 mb-8 flex items-center justify-between flex-wrap gap-2">
+      <div class="rounded-xl bg-white border border-slate-200 p-4 mb-4 flex items-center justify-between flex-wrap gap-2">
         <div>
           <p class="text-sm font-semibold text-maia-navy">Cobertura de preço: <span id="price-coverage" class="text-maia-orange-dark"></span></p>
           <p class="text-xs text-slate-400 mt-0.5">O preço de cada posto é coletado aos poucos (~20 a cada 5 min) para não sobrecarregar o servidor da Tupi — leva algumas horas para cobrir todo o estado.</p>
+        </div>
+      </div>
+
+      <div class="rounded-xl bg-white border border-slate-200 p-4 mb-8 flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <p class="text-sm font-semibold text-maia-navy">Mercado total estimado (fonte: ABVE, jul/2026): <span class="text-maia-orange-dark">6.954 eletropostos em SP</span> <span class="text-slate-400 font-normal">(5.401 AC / 1.553 DC)</span></p>
+          <p class="text-xs text-slate-400 mt-0.5">Nossa cobertura (via Tupi): <span id="market-coverage" class="font-semibold text-maia-navy"></span>. Número da ABVE é atualizado manualmente de vez em quando, não é dado ao vivo — <a href="https://abve.org.br/abve-data/bi-eletropostos/" target="_blank" rel="noopener" class="underline">ver painel da ABVE</a>.</p>
         </div>
       </div>
 
@@ -650,6 +657,9 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         allRegions = data.regions || [];
         document.getElementById("last-updated").textContent = "Atualizado " + new Date(data.updatedAt).toLocaleString("pt-BR");
         document.getElementById("price-coverage").textContent = `${(data.priceCoverage || 0).toLocaleString("pt-BR")} de ${data.count.toLocaleString("pt-BR")} postos`;
+        const ABVE_SP_TOTAL = 6954;
+        document.getElementById("market-coverage").textContent =
+          `${data.count.toLocaleString("pt-BR")} estações (${Math.round((data.count / ABVE_SP_TOTAL) * 100)}%)`;
         if (!map) {
           map = L.map("map").setView([-22.6, -48.0], 7);
           L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
