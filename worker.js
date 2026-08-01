@@ -1,6 +1,8 @@
 const SP_BOUNDS = { latMin: -25.36, latMax: -19.78, lngMin: -53.11, lngMax: -44.16 };
 const TUPI_STATIONS_URL = "https://api.tupinambaenergia.com.br/stationsShortVersion?plugTypes=&fast=false&searchText=";
 const TUPI_STATION_DETAIL_URL = (id) => `https://api.tupinambaenergia.com.br/station/${id}`;
+const CLUBECHARGER_STATIONS_URL = "https://clubecharger.com/api/map/stations";
+const AC_CONNECTOR_TYPES = new Set(["Type 2", "Type 1", "Tipo 2", "Tipo 1"]);
 const OPERATIONAL_STATES = new Set(["Available", "Charging", "Preparing", "Finishing", "Reserved"]);
 const IN_USE_STATES = new Set(["Charging"]);
 const PRICE_BATCH_SIZE = 20;
@@ -170,9 +172,96 @@ async function syncPricingBatch(env, spStationIds) {
   }
 }
 
+function parseBRNumber(str) {
+  if (!str) return null;
+  const match = String(str).replace(/\./g, "").match(/-?\d+,\d+|-?\d+/);
+  if (!match) return null;
+  return parseFloat(match[0].replace(",", "."));
+}
+
+const CC_STATUS_MAP = { offline: "Unavailable", faulted: "Faulted", unavailable: "Unavailable", finishing: "Finishing", reserved: "Reserved", suspendedev: "SuspendedEV" };
+function normalizeCcStatus(raw) {
+  if (!raw) return "Desconhecido";
+  const lower = String(raw).toLowerCase();
+  if (CC_STATUS_MAP[lower]) return CC_STATUS_MAP[lower];
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+// ClubeCharger: só os postos "linked" (vinculados à plataforma deles, com status ao
+// vivo) — os "community" (cadastro aberto por qualquer um) não têm telemetria real,
+// então ficam de fora. Diferente da Tupi, o preço já vem no mesmo payload da lista.
+async function syncClubeCharger(env) {
+  const res = await fetch(CLUBECHARGER_STATIONS_URL, { headers: FETCH_HEADERS });
+  if (!res.ok) return;
+  const data = await res.json();
+  const stations = (data.map_payload && data.map_payload.stations) || [];
+  const sp = stations.filter(
+    (s) =>
+      s.kind === "linked" &&
+      typeof s.latitude === "number" &&
+      typeof s.longitude === "number" &&
+      s.latitude >= SP_BOUNDS.latMin &&
+      s.latitude <= SP_BOUNDS.latMax &&
+      s.longitude >= SP_BOUNDS.lngMin &&
+      s.longitude <= SP_BOUNDS.lngMax
+  );
+
+  const now = Date.now();
+  const stationStmts = [];
+  const connectorStmts = [];
+  const snapshotStmts = [];
+  const pricingStmts = [];
+
+  for (const s of sp) {
+    const stationId = "cc_" + s.id;
+    stationStmts.push(
+      env.DB.prepare(
+        `INSERT INTO stations (station_id, name, network, lat, lng, source) VALUES (?, ?, ?, ?, ?, 'clubecharger')
+         ON CONFLICT(station_id) DO UPDATE SET name=excluded.name, network=excluded.network, lat=excluded.lat, lng=excluded.lng, source='clubecharger'`
+      ).bind(stationId, s.name || "", s.operator_display_name || "ClubeCharger", s.latitude, s.longitude)
+    );
+
+    const connectors = s.connector_slots || [];
+    connectors.forEach((c, idx) => {
+      const power = parseBRNumber(c.power_label);
+      const current = AC_CONNECTOR_TYPES.has(c.type) ? "AC" : "DC";
+      connectorStmts.push(
+        env.DB.prepare(
+          `INSERT INTO connector_meta (station_id, connector_index, power, current) VALUES (?, ?, ?, ?)
+           ON CONFLICT(station_id, connector_index) DO UPDATE SET power=excluded.power, current=excluded.current`
+        ).bind(stationId, idx, power, current)
+      );
+      snapshotStmts.push(
+        env.DB.prepare(`INSERT INTO status_snapshots (station_id, connector_index, state, captured_at) VALUES (?, ?, ?, ?)`).bind(
+          stationId,
+          idx,
+          normalizeCcStatus(c.status),
+          now
+        )
+      );
+    });
+
+    const price = parseBRNumber(s.pricing && s.pricing.active_price_label);
+    if (price !== null) {
+      pricingStmts.push(
+        env.DB.prepare(
+          `INSERT INTO station_pricing (station_id, price_per_kwh, idle_fee_enabled, idle_fee_value, currency, updated_at) VALUES (?, ?, 0, NULL, 'BRL', ?)
+           ON CONFLICT(station_id) DO UPDATE SET price_per_kwh=excluded.price_per_kwh, currency=excluded.currency, updated_at=excluded.updated_at`
+        ).bind(stationId, price, now)
+      );
+    }
+  }
+
+  await runBatches(env.DB, stationStmts);
+  await runBatches(env.DB, connectorStmts);
+  await runBatches(env.DB, snapshotStmts);
+  await runBatches(env.DB, pricingStmts);
+}
+
 async function runTick(env) {
   const spIds = await syncStationsAndSnapshots(env);
   await syncPricingBatch(env, spIds);
+  await syncClubeCharger(env);
 }
 
 async function buildEletropostosPayload(env, windowKey) {
@@ -182,7 +271,7 @@ async function buildEletropostosPayload(env, windowKey) {
   const windowHours = windowDays * 24;
 
   const [stationsRes, connectorsRes, latestRes, uptimeRes, pricingRes] = await Promise.all([
-    env.DB.prepare(`SELECT station_id, name, network, lat, lng FROM stations`).all(),
+    env.DB.prepare(`SELECT station_id, name, network, lat, lng, source FROM stations`).all(),
     env.DB.prepare(`SELECT station_id, connector_index, power, current FROM connector_meta`).all(),
     env.DB.prepare(
       `SELECT ss.station_id, ss.connector_index, ss.state
@@ -258,6 +347,7 @@ async function buildEletropostosPayload(env, windowKey) {
       lng: s.lng,
       regionCode: region.code,
       regionName: region.name,
+      source: s.source || "tupi",
       connectors,
       pricePerKwh: pricing?.price_per_kwh ?? null,
       idleFeeValue: pricing?.idle_fee_enabled ? pricing.idle_fee_value : null,
@@ -282,7 +372,7 @@ async function buildEletropostosPayload(env, windowKey) {
 
 async function buildStationDetail(env, stationId) {
   const [stationRow, connectorsRes, pricingRow, timelineRes] = await Promise.all([
-    env.DB.prepare(`SELECT station_id, name, network, lat, lng FROM stations WHERE station_id = ?`).bind(stationId).first(),
+    env.DB.prepare(`SELECT station_id, name, network, lat, lng, source FROM stations WHERE station_id = ?`).bind(stationId).first(),
     env.DB.prepare(`SELECT connector_index, power, current FROM connector_meta WHERE station_id = ?`).bind(stationId).all(),
     env.DB.prepare(`SELECT price_per_kwh, idle_fee_enabled, idle_fee_value, currency, updated_at FROM station_pricing WHERE station_id = ?`)
       .bind(stationId)
@@ -334,6 +424,7 @@ async function buildStationDetail(env, stationId) {
     id: stationRow.station_id,
     name: stationRow.name,
     network: stationRow.network,
+    source: stationRow.source || "tupi",
     lat: stationRow.lat,
     lng: stationRow.lng,
     connectorCount: totalConnectors,

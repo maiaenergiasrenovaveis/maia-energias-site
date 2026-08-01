@@ -192,6 +192,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       <section class="rounded-xl bg-slate-100 p-5 text-xs text-slate-500 space-y-1.5">
         <p class="font-semibold text-slate-600 uppercase tracking-wide text-[11px] mb-2">Metodologia & Fontes</p>
         <p><strong>Fonte:</strong> endpoint público usado pelo mapa de eletropostos da Tupi (não documentado oficialmente; encontrado inspecionando o site público deles). Sem chave de API, sem contrato firmado — pode mudar ou parar de funcionar sem aviso.</p>
+        <p><strong>ClubeCharger (selo "CC"):</strong> complementa a Tupi com postos cadastrados na plataforma ClubeCharger — só os "vinculados" (com status ao vivo), não a lista aberta de cadastro comunitário deles, que não tem telemetria real.</p>
         <p><strong>Filtro geográfico:</strong> estações dentro de uma caixa delimitadora aproximada do estado de SP (pode incluir alguns pontos de fronteira com estados vizinhos). Regiões são agrupadas por proximidade a um ponto de referência, não por limite administrativo real.</p>
         <p><strong>"Sem dado":</strong> nem toda estação listada no mapa da Tupi tem telemetria de conector — cerca de 70% delas aparecem só como ponto no mapa (provavelmente cadastros não conectados ao monitoramento ao vivo deles), sem status/preço/receita possíveis de calcular. A lista de estações prioriza mostrar primeiro as que têm telemetria real.</p>
         <p><strong>Status:</strong> refletem o último estado sincronizado de cada conector (protocolo OCPP): Available, Charging, Preparing, Finishing, Reserved = operacional (sem falha); Faulted, Unavailable, SuspendedEV = com problema.</p>
@@ -472,8 +473,9 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         const connectorSummary = s.connectors.length ? s.connectors.map(connectorPowerLabel).join(", ") : "—";
         const priceLabel = s.pricePerKwh ? `R$${s.pricePerKwh.toFixed(2)}/kWh` : "—";
         const revenueLabel = s.estimatedRevenue ? brl(s.estimatedRevenue) : "—";
+        const sourceBadge = s.source === "clubecharger" ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 align-middle">CC</span>' : "";
         return `<tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="window.__openStationDetail('${s.id}')">
-          <td class="py-2 pr-2 font-medium text-maia-navy">${s.name}</td>
+          <td class="py-2 pr-2 font-medium text-maia-navy">${s.name}${sourceBadge}</td>
           <td class="py-2 pr-2 text-slate-500">${s.network}</td>
           <td class="py-2 pr-2 text-slate-500">${s.regionName}</td>
           <td class="py-2 pr-2 text-slate-500">${connectorSummary}</td>
@@ -701,7 +703,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       if (!res.ok) throw new Error("detail not found");
       const d = await res.json();
       document.getElementById("detail-name").textContent = d.name || "(sem nome)";
-      document.getElementById("detail-network").textContent = d.network;
+      document.getElementById("detail-network").textContent = d.network + (d.source === "clubecharger" ? " · via ClubeCharger" : " · via Tupi");
       document.getElementById("detail-connectors").textContent = d.connectorCount;
       document.getElementById("detail-power").textContent = d.totalPowerKw + " kW" + (d.hasSuspiciousPower ? " ⚠️" : "");
       document.getElementById("detail-power-note").textContent = d.hasSuspiciousPower ? "potência total (exclui conector com valor implausível)" : "potência total";
