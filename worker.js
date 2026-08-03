@@ -327,13 +327,15 @@ async function buildEletropostosPayload(env, windowKey) {
 
     // Receita estimada usa % de tempo REALMENTE carregando ("Charging"), não % de tempo
     // apenas disponível/sem falha — disponível ocioso não gera receita. O consumo por
-    // hora de uso é fixo (ENERGY_PER_HOUR_KWH), não a potência nominal do conector.
+    // hora de uso é o menor entre ENERGY_PER_HOUR_KWH (teto realista de recarga DC) e a
+    // potência nominal do conector — um AC de 22kW fisicamente não entrega 40kWh/h.
     let estimatedRevenue = null;
     if (pricing && pricing.price_per_kwh && connectors.length) {
       let sum = 0;
       for (const c of connectors) {
         if (c.utilizationPctWindow !== null) {
-          sum += c.utilizationPctWindow * windowHours * ENERGY_PER_HOUR_KWH * pricing.price_per_kwh;
+          const energyPerHour = c.power ? Math.min(ENERGY_PER_HOUR_KWH, c.power) : ENERGY_PER_HOUR_KWH;
+          sum += c.utilizationPctWindow * windowHours * energyPerHour * pricing.price_per_kwh;
         }
       }
       estimatedRevenue = sum > 0 ? Math.round(sum) : null;
@@ -395,23 +397,37 @@ async function buildStationDetail(env, stationId) {
   for (const key of Object.keys(WINDOW_DAYS)) {
     const days = WINDOW_DAYS[key];
     const since = key === "all" ? 0 : Date.now() - days * 24 * 3600 * 1000;
-    const stats = await env.DB.prepare(
-      `SELECT AVG(CASE WHEN state = 'Charging' THEN 1.0 ELSE 0.0 END) AS utilization_pct,
+    const hours = days * 24;
+    // Por conector, não agregado — cada conector tem seu próprio teto de potência
+    // (um AC de 22kW não entrega 40kWh/h só porque a média inclui um DC de 150kW).
+    const perConn = await env.DB.prepare(
+      `SELECT connector_index,
+              AVG(CASE WHEN state = 'Charging' THEN 1.0 ELSE 0.0 END) AS utilization_pct,
               AVG(CASE WHEN state IN ('Available','Charging','Preparing','Finishing','Reserved') THEN 1.0 ELSE 0.0 END) AS uptime_pct,
               COUNT(*) AS samples
-       FROM status_snapshots WHERE station_id = ? AND captured_at > ?`
+       FROM status_snapshots WHERE station_id = ? AND captured_at > ? GROUP BY connector_index`
     )
       .bind(stationId, since)
-      .first();
-    const hours = days * 24;
-    const enough = stats && stats.samples >= MIN_SAMPLES_FOR_ESTIMATE;
+      .all();
+    const rows = perConn.results.filter((r) => r.samples >= MIN_SAMPLES_FOR_ESTIMATE);
+    const enough = rows.length > 0;
+
     let revenue = null;
-    if (enough && pricingRow?.price_per_kwh && totalConnectors) {
-      // utilization_pct é a média entre conectores; multiplica por totalConnectors para
-      // voltar a "conector-horas em uso" e por ENERGY_PER_HOUR_KWH (não pela potência
-      // nominal, que pode estar errada no cadastro da Tupi — ver MAX_PLAUSIBLE_POWER_KW).
-      revenue = Math.round(stats.utilization_pct * totalConnectors * hours * ENERGY_PER_HOUR_KWH * pricingRow.price_per_kwh);
+    if (enough && pricingRow?.price_per_kwh) {
+      let sum = 0;
+      for (const r of rows) {
+        const meta = connectorsRes.results.find((c) => c.connector_index === r.connector_index);
+        const power = meta?.power;
+        const energyPerHour = power ? Math.min(ENERGY_PER_HOUR_KWH, power) : ENERGY_PER_HOUR_KWH;
+        sum += r.utilization_pct * hours * energyPerHour * pricingRow.price_per_kwh;
+      }
+      revenue = sum > 0 ? Math.round(sum) : null;
     }
+    const stats = {
+      utilization_pct: enough ? rows.reduce((a, r) => a + r.utilization_pct, 0) / rows.length : null,
+      uptime_pct: enough ? rows.reduce((a, r) => a + r.uptime_pct, 0) / rows.length : null,
+      samples: perConn.results.reduce((a, r) => a + r.samples, 0),
+    };
     revenueByWindow[key] = {
       revenue,
       utilizationPct: enough ? stats.utilization_pct : null,
