@@ -193,6 +193,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <p class="font-semibold text-slate-600 uppercase tracking-wide text-[11px] mb-2">Metodologia & Fontes</p>
         <p><strong>Fonte:</strong> endpoint público usado pelo mapa de eletropostos da Tupi (não documentado oficialmente; encontrado inspecionando o site público deles). Sem chave de API, sem contrato firmado — pode mudar ou parar de funcionar sem aviso.</p>
         <p><strong>ClubeCharger (selo "CC"):</strong> complementa a Tupi com postos cadastrados na plataforma ClubeCharger — só os "vinculados" (com status ao vivo), não a lista aberta de cadastro comunitário deles, que não tem telemetria real.</p>
+        <p><strong>GO Electric (selo "GE"):</strong> postos publicados na página deles, sem status ao vivo nem preço — aparecem como "sem dado de conector" até termos como confirmar operação/uso, servindo por enquanto só como referência de localização e potência.</p>
         <p><strong>Filtro geográfico:</strong> estações dentro de uma caixa delimitadora aproximada do estado de SP (pode incluir alguns pontos de fronteira com estados vizinhos). Regiões são agrupadas por proximidade a um ponto de referência, não por limite administrativo real.</p>
         <p><strong>"Sem dado":</strong> nem toda estação listada no mapa da Tupi tem telemetria de conector — cerca de 70% delas aparecem só como ponto no mapa (provavelmente cadastros não conectados ao monitoramento ao vivo deles), sem status/preço/receita possíveis de calcular. A lista de estações prioriza mostrar primeiro as que têm telemetria real.</p>
         <p><strong>Status:</strong> refletem o último estado sincronizado de cada conector (protocolo OCPP): Available, Charging, Preparing, Finishing, Reserved = operacional (sem falha); Faulted, Unavailable, SuspendedEV = com problema.</p>
@@ -260,7 +261,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
             </div>
           </div>
 
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Carros carregando simultaneamente — últimas 24h</p>
+          <p id="detail-chart-title" class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Carros carregando simultaneamente — últimas 24h</p>
           <canvas id="detail-chart" height="120"></canvas>
         </div>
       </div>
@@ -382,6 +383,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
             <div class="flex justify-between"><dt class="text-slate-400 pl-2">— AC / DC</dt><dd class="text-slate-400">${r.ac.toLocaleString("pt-BR")} / ${r.dc.toLocaleString("pt-BR")}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">Operacional</dt><dd class="font-semibold">${r.conectores ? Math.round((r.ok / r.conectores) * 100) + "%" : "—"}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">Receita est. (30d)</dt><dd class="font-semibold text-maia-green">${r.receita ? brl(r.receita) : "—"}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-400 pl-2">— média/conector</dt><dd class="text-slate-400">${r.receita && r.conectores ? brl(Math.round(r.receita / r.conectores)) : "—"}</dd></div>
           </dl>
         </div>
       `).join("");
@@ -473,7 +475,11 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         const connectorSummary = s.connectors.length ? s.connectors.map(connectorPowerLabel).join(", ") : "—";
         const priceLabel = s.pricePerKwh ? `R$${s.pricePerKwh.toFixed(2)}/kWh` : "—";
         const revenueLabel = s.estimatedRevenue ? brl(s.estimatedRevenue) : "—";
-        const sourceBadge = s.source === "clubecharger" ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 align-middle">CC</span>' : "";
+        const sourceBadges = {
+          clubecharger: ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 align-middle">CC</span>',
+          goelectric: ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 align-middle">GE</span>',
+        };
+        const sourceBadge = sourceBadges[s.source] || "";
         return `<tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="window.__openStationDetail('${s.id}')">
           <td class="py-2 pr-2 font-medium text-maia-navy">${s.name}${sourceBadge}</td>
           <td class="py-2 pr-2 text-slate-500">${s.network}</td>
@@ -703,7 +709,8 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       if (!res.ok) throw new Error("detail not found");
       const d = await res.json();
       document.getElementById("detail-name").textContent = d.name || "(sem nome)";
-      document.getElementById("detail-network").textContent = d.network + (d.source === "clubecharger" ? " · via ClubeCharger" : " · via Tupi");
+      const sourceLabels = { clubecharger: " · via ClubeCharger", goelectric: " · via GO Electric" };
+      document.getElementById("detail-network").textContent = d.network + (sourceLabels[d.source] || " · via Tupi");
       document.getElementById("detail-connectors").textContent = d.connectorCount;
       document.getElementById("detail-power").textContent = d.totalPowerKw + " kW" + (d.hasSuspiciousPower ? " ⚠️" : "");
       document.getElementById("detail-power-note").textContent = d.hasSuspiciousPower ? "potência total (exclui conector com valor implausível)" : "potência total";
@@ -711,23 +718,21 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       document.getElementById("detail-idle").textContent = d.idleFeeValue ? "R$" + d.idleFeeValue.toFixed(2) : "—";
 
       renderDetailWindow(d);
+      renderDetailChart(d);
 
-      const labels = d.timeline24h.map((p) => new Date(p.t).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
-      const values = d.timeline24h.map((p) => p.charging);
-      if (detailChart) detailChart.destroy();
-      detailChart = new Chart(document.getElementById("detail-chart"), {
-        type: "line",
-        data: { labels, datasets: [{ label: "Carros carregando", data: values, borderColor: "#0b3d62", backgroundColor: "rgba(11,61,98,0.08)", fill: true, stepped: true, pointRadius: 0 }] },
-        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } },
-      });
-
-      d.__cache = d;
       window.__currentDetail = d;
       document.getElementById("detail-loading").classList.add("hidden");
       document.getElementById("detail-body").classList.remove("hidden");
     }
 
     const MIN_SAMPLES_FOR_ESTIMATE = 12; // mantido em sincronia com worker.js
+    const DETAIL_CHART_TITLE = {
+      "24h": "Carros carregando simultaneamente — últimas 24h",
+      "7d": "Carros carregando simultaneamente (média/hora) — últimos 7 dias",
+      "15d": "Carros carregando simultaneamente (média/dia) — últimos 15 dias",
+      "30d": "Carros carregando simultaneamente (média/dia) — últimos 30 dias",
+      all: "Carros carregando simultaneamente (média/dia) — acumulado",
+    };
 
     function renderDetailWindow(d) {
       const w = d.revenueByWindow[detailWindow];
@@ -738,13 +743,34 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       document.getElementById("detail-revenue").textContent = label || (w?.revenue ? brl(w.revenue) : "—");
     }
 
+    function renderDetailChart(d) {
+      const points = (d.timelineByWindow && d.timelineByWindow[detailWindow]) || [];
+      const useDate = detailWindow !== "24h";
+      const labels = points.map((p) =>
+        useDate
+          ? new Date(p.t).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + (detailWindow === "7d" ? " " + new Date(p.t).toLocaleTimeString("pt-BR", { hour: "2-digit" }) : "")
+          : new Date(p.t).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+      );
+      const values = points.map((p) => p.charging);
+      document.getElementById("detail-chart-title").textContent = DETAIL_CHART_TITLE[detailWindow] || DETAIL_CHART_TITLE["24h"];
+      if (detailChart) detailChart.destroy();
+      detailChart = new Chart(document.getElementById("detail-chart"), {
+        type: "line",
+        data: { labels, datasets: [{ label: "Carros carregando", data: values, borderColor: "#0b3d62", backgroundColor: "rgba(11,61,98,0.08)", fill: true, stepped: detailWindow === "24h", tension: detailWindow === "24h" ? 0 : 0.25, pointRadius: 0 }] },
+        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+      });
+    }
+
     document.querySelectorAll(".detail-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
         detailWindow = btn.dataset.window;
         document.querySelectorAll(".detail-tab").forEach((b) => { b.classList.remove("bg-maia-green", "text-white"); b.classList.add("text-slate-600"); });
         btn.classList.add("bg-maia-green", "text-white");
         btn.classList.remove("text-slate-600");
-        if (window.__currentDetail) renderDetailWindow(window.__currentDetail);
+        if (window.__currentDetail) {
+          renderDetailWindow(window.__currentDetail);
+          renderDetailChart(window.__currentDetail);
+        }
       });
     });
 

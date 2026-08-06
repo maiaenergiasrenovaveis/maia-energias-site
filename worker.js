@@ -2,6 +2,7 @@ const SP_BOUNDS = { latMin: -25.36, latMax: -19.78, lngMin: -53.11, lngMax: -44.
 const TUPI_STATIONS_URL = "https://api.tupinambaenergia.com.br/stationsShortVersion?plugTypes=&fast=false&searchText=";
 const TUPI_STATION_DETAIL_URL = (id) => `https://api.tupinambaenergia.com.br/station/${id}`;
 const CLUBECHARGER_STATIONS_URL = "https://clubecharger.com/api/map/stations";
+const GOELECTRIC_PAGE_URL = "https://www.goelectric-emobility.com/eletropostos/";
 const AC_CONNECTOR_TYPES = new Set(["Type 2", "Type 1", "Tipo 2", "Tipo 1"]);
 const OPERATIONAL_STATES = new Set(["Available", "Charging", "Preparing", "Finishing", "Reserved"]);
 const IN_USE_STATES = new Set(["Charging"]);
@@ -258,10 +259,76 @@ async function syncClubeCharger(env) {
   await runBatches(env.DB, pricingStmts);
 }
 
+function parseGoElectricConnectors(inlineStr) {
+  if (!inlineStr) return [];
+  const segments = inlineStr.split("+").map((s) => s.trim());
+  const connectors = [];
+  for (const seg of segments) {
+    const m = seg.match(/^(\d+)\s*[×x]\s*(.+?)\s+(\d+(?:[.,]\d+)?)\s*kW$/i);
+    if (!m) continue;
+    const count = parseInt(m[1], 10);
+    const type = m[2].trim();
+    const power = parseFloat(m[3].replace(",", "."));
+    for (let i = 0; i < count; i++) connectors.push({ type, power });
+  }
+  return connectors;
+}
+
+// GO Electric: lista embutida direto no HTML da página deles (window.GE_STATIONS),
+// sem endpoint de API separado. Dado é estático (sem status ao vivo nem preço) — só
+// cria estação + conectores, sem status_snapshots, para não fingir monitoramento que
+// não existe. A UI já trata isso como "sem dado de conector" naturalmente.
+async function syncGoElectric(env) {
+  const res = await fetch(GOELECTRIC_PAGE_URL, { headers: FETCH_HEADERS });
+  if (!res.ok) return;
+  const html = await res.text();
+  const match = html.match(/window\.GE_STATIONS\s*=\s*(\[.*?\]);/s);
+  if (!match) return;
+  let stations;
+  try {
+    stations = JSON.parse(match[1]);
+  } catch {
+    return;
+  }
+  const spAll = stations.filter((s) => s.state === "SP" && typeof s.lat === "number" && typeof s.lng === "number");
+
+  // Não duplica postos que já existem via outra fonte (mesmo local físico, ~300m).
+  const existing = await env.DB.prepare(`SELECT lat, lng FROM stations WHERE source != 'goelectric'`).all();
+  const DEDUPE_DEGREES = 0.003; // ~300m
+  const isDuplicate = (lat, lng) => existing.results.some((e) => Math.abs(e.lat - lat) < DEDUPE_DEGREES && Math.abs(e.lng - lng) < DEDUPE_DEGREES);
+  const sp = spAll.filter((s) => !isDuplicate(s.lat, s.lng));
+
+  const stationStmts = [];
+  const connectorStmts = [];
+  for (const s of sp) {
+    const stationId = "ge_" + s.slug;
+    stationStmts.push(
+      env.DB.prepare(
+        `INSERT INTO stations (station_id, name, network, lat, lng, source) VALUES (?, ?, ?, ?, ?, 'goelectric')
+         ON CONFLICT(station_id) DO UPDATE SET name=excluded.name, network=excluded.network, lat=excluded.lat, lng=excluded.lng, source='goelectric'`
+      ).bind(stationId, s.name || "", "GO Electric", s.lat, s.lng)
+    );
+    const connectors = parseGoElectricConnectors(s.connectors_inline);
+    connectors.forEach((c, idx) => {
+      const current = AC_CONNECTOR_TYPES.has(c.type) ? "AC" : "DC";
+      connectorStmts.push(
+        env.DB.prepare(
+          `INSERT INTO connector_meta (station_id, connector_index, power, current) VALUES (?, ?, ?, ?)
+           ON CONFLICT(station_id, connector_index) DO UPDATE SET power=excluded.power, current=excluded.current`
+        ).bind(stationId, idx, c.power, current)
+      );
+    });
+  }
+
+  await runBatches(env.DB, stationStmts);
+  await runBatches(env.DB, connectorStmts);
+}
+
 async function runTick(env) {
   const spIds = await syncStationsAndSnapshots(env);
   await syncPricingBatch(env, spIds);
   await syncClubeCharger(env);
+  await syncGoElectric(env);
 }
 
 async function buildEletropostosPayload(env, windowKey) {
@@ -372,19 +439,41 @@ async function buildEletropostosPayload(env, windowKey) {
   };
 }
 
+async function buildTimeline(env, stationId, sinceMs, bucketMs) {
+  const res = await env.DB.prepare(
+    `SELECT captured_at, SUM(CASE WHEN state = 'Charging' THEN 1 ELSE 0 END) AS charging, COUNT(*) AS total
+     FROM status_snapshots WHERE station_id = ? AND captured_at > ? GROUP BY captured_at ORDER BY captured_at ASC`
+  )
+    .bind(stationId, sinceMs)
+    .all();
+  const points = res.results.map((r) => ({ t: r.captured_at, charging: r.charging, total: r.total }));
+  if (!bucketMs) return points;
+
+  // Agrupamento em JS (não em SQL) — divisão inteira do SQLite com parâmetros bound
+  // como REAL não trunca como esperado, o que fazia cada tick virar seu próprio "bucket".
+  const buckets = new Map();
+  for (const p of points) {
+    const key = Math.floor(p.t / bucketMs) * bucketMs;
+    if (!buckets.has(key)) buckets.set(key, { sumCharging: 0, sumTotal: 0, n: 0 });
+    const b = buckets.get(key);
+    b.sumCharging += p.charging;
+    b.sumTotal += p.total;
+    b.n += 1;
+  }
+  return [...buckets.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([t, b]) => ({ t, charging: Math.round((b.sumCharging / b.n) * 10) / 10, total: Math.round(b.sumTotal / b.n) }));
+}
+
+const TIMELINE_BUCKET_MS = { "24h": 0, "7d": 3600 * 1000, "15d": 24 * 3600 * 1000, "30d": 24 * 3600 * 1000, all: 24 * 3600 * 1000 };
+
 async function buildStationDetail(env, stationId) {
-  const [stationRow, connectorsRes, pricingRow, timelineRes] = await Promise.all([
+  const [stationRow, connectorsRes, pricingRow] = await Promise.all([
     env.DB.prepare(`SELECT station_id, name, network, lat, lng, source FROM stations WHERE station_id = ?`).bind(stationId).first(),
     env.DB.prepare(`SELECT connector_index, power, current FROM connector_meta WHERE station_id = ?`).bind(stationId).all(),
     env.DB.prepare(`SELECT price_per_kwh, idle_fee_enabled, idle_fee_value, currency, updated_at FROM station_pricing WHERE station_id = ?`)
       .bind(stationId)
       .first(),
-    env.DB.prepare(
-      `SELECT captured_at, SUM(CASE WHEN state = 'Charging' THEN 1 ELSE 0 END) AS charging, COUNT(*) AS total
-       FROM status_snapshots WHERE station_id = ? AND captured_at > ? GROUP BY captured_at ORDER BY captured_at ASC`
-    )
-      .bind(stationId, Date.now() - 24 * 3600 * 1000)
-      .all(),
   ]);
 
   if (!stationRow) return null;
@@ -394,10 +483,12 @@ async function buildStationDetail(env, stationId) {
   const totalPowerKw = connectorsRes.results.reduce((acc, c) => acc + (c.power && c.power <= MAX_PLAUSIBLE_POWER_KW ? c.power : 0), 0);
 
   const revenueByWindow = {};
+  const timelineByWindow = {};
   for (const key of Object.keys(WINDOW_DAYS)) {
     const days = WINDOW_DAYS[key];
     const since = key === "all" ? 0 : Date.now() - days * 24 * 3600 * 1000;
     const hours = days * 24;
+    timelineByWindow[key] = await buildTimeline(env, stationId, since, TIMELINE_BUCKET_MS[key]);
     // Por conector, não agregado — cada conector tem seu próprio teto de potência
     // (um AC de 22kW não entrega 40kWh/h só porque a média inclui um DC de 150kW).
     const perConn = await env.DB.prepare(
@@ -449,7 +540,7 @@ async function buildStationDetail(env, stationId) {
     pricePerKwh: pricingRow?.price_per_kwh ?? null,
     idleFeeValue: pricingRow?.idle_fee_enabled ? pricingRow.idle_fee_value : null,
     revenueByWindow,
-    timeline24h: timelineRes.results.map((r) => ({ t: r.captured_at, charging: r.charging, total: r.total })),
+    timelineByWindow,
   };
 }
 
@@ -556,6 +647,7 @@ async function handleFetch(request, env) {
       return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { "content-type": "application/json" } });
     }
   }
+
 
   if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/geocode") {
     try {
