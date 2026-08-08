@@ -138,3 +138,44 @@ export const businessFaq: FaqItem[] = [
       "Não há um valor fixo — depende do perfil de consumo, da demanda contratada e das condições comerciais negociadas com o fornecedor. A Maia avalia se a migração faz sentido para o perfil da empresa dentro do diagnóstico energético, comparando o cenário atual no mercado regulado com as condições estimadas no mercado livre.",
   },
 ];
+
+// FAQ específico da oferta de instalação de energia solar na cidade de São
+// Paulo (comércios, condomínios e residências com consumo acima de 10.000
+// kWh/mês).
+export const solarSpFaq: FaqItem[] = [
+  {
+    question: "Essa instalação de energia solar atende qualquer região?",
+    answer:
+      "No momento, essa modalidade atende apenas a cidade de São Paulo (capital). Para outras regiões, a Maia também estrutura investimento em usinas solares e eficiência energética empresarial em todo o Brasil.",
+  },
+  {
+    question: "Como sei se meu consumo de 10.000 kWh por mês se qualifica?",
+    answer:
+      "Basta enviar a conta de energia mais recente do comércio, condomínio ou residência — ela já mostra o consumo mensal em kWh. A partir de 10.000 kWh/mês, o dimensionamento de um sistema solar próprio costuma ser tecnicamente e financeiramente mais vantajoso.",
+  },
+  {
+    question: "Qual a diferença entre comprar o sistema solar e o modelo Energy as a Service (EaaS)?",
+    answer:
+      "Na instalação própria, o cliente investe no sistema (à vista ou financiado) e o sistema fica registrado em seu nome. No modelo EaaS, não há aporte de capital: a Maia projeta, instala e opera o sistema, e o cliente paga apenas pela energia efetivamente consumida, geralmente com valor menor que a tarifa da distribuidora.",
+  },
+  {
+    question: "É possível instalar energia solar em condomínio?",
+    answer:
+      "Sim. Condomínios residenciais e comerciais podem instalar sistemas solares para abater o consumo das áreas comuns ou compartilhar os créditos de geração entre as unidades, conforme as regras de geração distribuída da ANEEL.",
+  },
+  {
+    question: "Quanto tempo leva para instalar o sistema solar em São Paulo?",
+    answer:
+      "O prazo varia conforme o porte do projeto e o processo de homologação junto à distribuidora local (Enel São Paulo) — a Maia apresenta o cronograma estimado depois da análise técnica do local.",
+  },
+  {
+    question: "Qual a garantia dos equipamentos?",
+    answer:
+      "As placas fotovoltaicas contam com garantia de fabricação de 10 a 15 anos e garantia de eficiência mínima de 80% ao longo de 25 anos. Os inversores têm garantia mínima de 5 anos, e a instalação, geralmente 1 ano.",
+  },
+  {
+    question: "Quanto posso economizar na conta de energia?",
+    answer:
+      "A economia depende do perfil de consumo, da estrutura elétrica do local e do modelo escolhido (instalação própria ou EaaS) — os valores são calculados individualmente após a análise técnica, sem percentual fixo ou garantido.",
+  },
+];
