@@ -12,7 +12,7 @@
 
 ## Empresas (eficiência energética e Energy as a Service)
 - Público: empresas com gasto mensal de energia elétrica a partir de R$50 mil (indústrias, supermercados, hospitais, hotéis, shoppings, condomínios empresariais, entre outros).
-- Diagnóstico a partir das últimas 12 contas de energia.
+- Diagnóstico a partir da conta de energia mais recente (já traz o histórico de consumo dos últimos 12 meses).
 - Soluções: revisão de demanda contratada, correção de fator de potência (banco de capacitores), geração solar, armazenamento de energia (BESS), modernização de subestações, automação.
 - Modelo Energy as a Service (EaaS): a empresa contrata a solução de energia sem aportar capital próprio; a Maia projeta, implementa e opera o sistema.
 - Página: /empresas

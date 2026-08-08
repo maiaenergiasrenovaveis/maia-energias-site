@@ -1,6 +1,7 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { getCollection, render } from "astro:content";
+import { site } from "../../data/site";
 
 export async function getStaticPaths() {
   const posts = await getCollection("blog");
@@ -18,9 +19,36 @@ const formattedDate = new Intl.DateTimeFormat("pt-BR", {
   month: "long",
   year: "numeric",
 }).format(post.data.publishDate);
+
+const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
+const canonicalUrl = `${siteUrl}/blog/${post.id}`;
+const isoDate = post.data.publishDate.toISOString().slice(0, 10);
+
+const articleSchema = {
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  headline: post.data.title,
+  description: post.data.description,
+  datePublished: isoDate,
+  dateModified: isoDate,
+  url: canonicalUrl,
+  mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl },
+  author: { "@type": "Organization", name: site.legalName, url: siteUrl },
+  publisher: {
+    "@type": "Organization",
+    name: site.legalName,
+    logo: { "@type": "ImageObject", url: `${siteUrl}/logo.png` },
+  },
+  image: `${siteUrl}/logo.png`,
+  audience: {
+    "@type": "Audience",
+    audienceType: post.data.audience === "investidores" ? "Investidores" : "Empresas",
+  },
+};
 ---
 
 <BaseLayout title={post.data.title} description={post.data.description}>
+  <script type="application/ld+json" set:html={JSON.stringify(articleSchema)} slot="head" />
   <article class="mx-auto max-w-3xl px-4 py-16 prose prose-slate prose-headings:text-maia-navy prose-a:text-maia-blue">
     <a href="/blog" class="not-prose text-sm font-semibold text-maia-blue hover:text-maia-blue-dark">← Voltar ao blog</a>
     <div class="mt-6 flex items-center gap-3 not-prose">
