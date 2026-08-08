@@ -75,7 +75,7 @@ export const businessFaq: FaqItem[] = [
   {
     question: "Como sei se minha empresa está pagando mais do que deveria pela energia?",
     answer:
-      "O primeiro passo é um diagnóstico energético: a Maia analisa as últimas 12 contas de energia para identificar problemas como demanda contratada inadequada, cobrança por ultrapassagem, energia reativa excedente e fator de potência fora do ideal.",
+      "O primeiro passo é um diagnóstico energético: a Maia analisa a conta de energia mais recente da empresa — que já traz o histórico de consumo dos últimos 12 meses — para identificar problemas como demanda contratada inadequada, cobrança por ultrapassagem, energia reativa excedente e fator de potência fora do ideal.",
   },
   {
     question: "O que é demanda contratada e por que ela pode gerar cobranças indevidas?",
@@ -110,7 +110,7 @@ export const businessFaq: FaqItem[] = [
   {
     question: "Que documentos preciso enviar para uma análise preliminar?",
     answer:
-      "Basta enviar as últimas 12 contas de energia da empresa. Com isso, a Maia consegue fazer uma primeira leitura do perfil de consumo e indicar as oportunidades mais prováveis.",
+      "Basta enviar a conta de energia mais recente da empresa — ela já traz o histórico de consumo dos últimos 12 meses. Com isso, a Maia consegue fazer uma primeira leitura do perfil de consumo e indicar as oportunidades mais prováveis.",
   },
   {
     question: "Como reduzir a conta de energia da minha indústria?",

@@ -5,15 +5,15 @@ publishDate: 2026-08-08
 audience: empresas
 ---
 
-O **diagnóstico energético** é o primeiro passo para saber se sua empresa está pagando mais do que deveria pela energia — ele analisa as últimas 12 contas e a estrutura elétrica da instalação para identificar desperdícios reais, sem custo para solicitar a análise preliminar.
+O **diagnóstico energético** é o primeiro passo para saber se sua empresa está pagando mais do que deveria pela energia — ele analisa o histórico de consumo e a estrutura elétrica da instalação para identificar desperdícios reais, sem custo para solicitar a análise preliminar.
 
-## Etapa 1 — Envio das últimas 12 contas de energia
+## Etapa 1 — Envio da conta de energia
 
-Basta enviar as últimas 12 contas de energia da empresa. Com esse histórico, a Maia consegue fazer uma primeira leitura do perfil de consumo — sazonalidade, horários de pico, e indícios de distorções na demanda contratada ou no fator de potência.
+Basta enviar a conta de energia mais recente da empresa — ela já traz o histórico de consumo dos últimos 12 meses, então não é preciso reunir várias contas antigas. Com esse histórico, a Maia consegue fazer uma primeira leitura do perfil de consumo — sazonalidade, horários de pico, e indícios de distorções na demanda contratada ou no fator de potência.
 
 ## Etapa 2 — Análise técnica do consumo e da instalação
 
-A partir das contas e, quando necessário, de uma visita técnica, a Maia analisa:
+A partir da conta e, quando necessário, de uma visita técnica, a Maia analisa:
 
 - **Demanda contratada** — se está dimensionada corretamente para o consumo real;
 - **Fator de potência** — se está dentro do mínimo exigido pela distribuidora;
@@ -31,6 +31,6 @@ Aprovadas as medidas, a Maia acompanha a implementação das soluções — que 
 
 ## Quanto tempo leva
 
-O prazo varia conforme a complexidade da instalação e o volume de dados analisados, mas a primeira leitura a partir das 12 contas de energia costuma ser rápida — o diagnóstico técnico mais aprofundado (com visita, se necessária) é que define o cronograma completo.
+O prazo varia conforme a complexidade da instalação e o volume de dados analisados, mas a primeira leitura a partir da conta de energia costuma ser rápida — o diagnóstico técnico mais aprofundado (com visita, se necessária) é que define o cronograma completo.
 
-Quer começar o diagnóstico da sua empresa? [Envie as últimas 12 contas de energia](/contato) para uma análise preliminar.
+Quer começar o diagnóstico da sua empresa? [Envie sua última conta de energia](/contato) para uma análise preliminar.

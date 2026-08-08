@@ -31,4 +31,4 @@ Não existe um percentual fixo de economia: o resultado depende do perfil de con
 
 O diagnóstico energético da Maia inclui a análise de elegibilidade e potencial de economia com a migração para o mercado livre, sempre comparado ao cenário atual no mercado regulado — a decisão de migrar (ou não) é sempre baseada em números concretos do perfil da própria empresa.
 
-Quer saber se sua empresa pode migrar? [Envie as últimas 12 contas de energia](/contato) para uma análise preliminar.
+Quer saber se sua empresa pode migrar? [Envie sua última conta de energia](/contato) para uma análise preliminar.

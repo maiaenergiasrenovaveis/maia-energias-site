@@ -9,7 +9,7 @@ audience: empresas
 
 ## Como funciona na prática
 
-1. **Diagnóstico energético**: análise das últimas 12 contas de energia e da estrutura elétrica da empresa;
+1. **Diagnóstico energético**: análise da conta de energia mais recente (que já traz o histórico dos últimos 12 meses) e da estrutura elétrica da empresa;
 2. **Dimensionamento do projeto**: cálculo da usina (ou combinação de medidas) mais adequada ao perfil de consumo;
 3. **Estruturação do contrato**: definição do modelo — a empresa não precisa aportar capital, e a Maia estrutura o financiamento e a operação da usina;
 4. **Operação**: a empresa passa a pagar pela energia gerada, geralmente a um valor por kWh menor que a tarifa da distribuidora.

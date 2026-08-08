@@ -19,8 +19,8 @@ Quando a demanda contratada é definida acima do que a empresa realmente utiliza
 
 ## Como identificar o problema
 
-A forma mais direta é um diagnóstico técnico a partir do histórico de consumo — geralmente as últimas 12 contas de energia — que revela o perfil real de demanda e aponta se há descompasso entre o contratado e o utilizado.
+A forma mais direta é um diagnóstico técnico a partir do histórico de consumo — a própria conta de energia já traz o histórico dos últimos 12 meses, então basta enviar a conta mais recente — que revela o perfil real de demanda e aponta se há descompasso entre o contratado e o utilizado.
 
 Empresas com contas de energia elétrica acima de R$50 mil por mês costumam ter o maior potencial de ganho ao corrigir esse tipo de desalinhamento, mas cada caso precisa ser avaliado individualmente.
 
-Quer um diagnóstico da sua empresa? [Envie as últimas 12 contas de energia](/contato) para uma análise preliminar.
+Quer um diagnóstico da sua empresa? [Envie sua última conta de energia](/contato) para uma análise preliminar.
