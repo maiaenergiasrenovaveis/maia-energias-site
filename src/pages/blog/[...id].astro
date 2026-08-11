@@ -18,6 +18,7 @@ const formattedDate = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "long",
   year: "numeric",
+  timeZone: "UTC",
 }).format(post.data.publishDate);
 
 const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? "";
