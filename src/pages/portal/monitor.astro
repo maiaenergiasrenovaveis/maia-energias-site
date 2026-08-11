@@ -194,6 +194,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <p><strong>Fonte:</strong> endpoint público usado pelo mapa de eletropostos da Tupi (não documentado oficialmente; encontrado inspecionando o site público deles). Sem chave de API, sem contrato firmado — pode mudar ou parar de funcionar sem aviso.</p>
         <p><strong>ClubeCharger (selo "CC"):</strong> complementa a Tupi com postos cadastrados na plataforma ClubeCharger — só os "vinculados" (com status ao vivo), não a lista aberta de cadastro comunitário deles, que não tem telemetria real.</p>
         <p><strong>GO Electric (selo "GE"):</strong> postos publicados na página deles, sem status ao vivo nem preço — aparecem como "sem dado de conector" até termos como confirmar operação/uso, servindo por enquanto só como referência de localização e potência.</p>
+        <p><strong>Frota carregável* (cards de região):</strong> soma de veículos elétricos e híbridos plug-in (categorias ELETRICO, ELETRICO/FONTE EXTERNA e combinações com combustível) por município, fonte RENAVAM/SENATRAN (<a href="https://www.gov.br/transportes/pt-br/assuntos/transito/conteudo-Senatran/frota-de-veiculos-2026" target="_blank" rel="noopener" class="underline">dados abertos</a>, jul/2026), reclassificada nas nossas 6 regiões por proximidade do município. Atualizado manualmente (planilha mensal, sem API) — não é dado ao vivo. "VEs/conector" ajuda a ver onde a demanda potencial é maior que a infraestrutura instalada.</p>
         <p><strong>Filtro geográfico:</strong> estações dentro de uma caixa delimitadora aproximada do estado de SP (pode incluir alguns pontos de fronteira com estados vizinhos). Regiões são agrupadas por proximidade a um ponto de referência, não por limite administrativo real.</p>
         <p><strong>"Sem dado":</strong> nem toda estação listada no mapa da Tupi tem telemetria de conector — cerca de 70% delas aparecem só como ponto no mapa (provavelmente cadastros não conectados ao monitoramento ao vivo deles), sem status/preço/receita possíveis de calcular. A lista de estações prioriza mostrar primeiro as que têm telemetria real.</p>
         <p><strong>Status:</strong> refletem o último estado sincronizado de cada conector (protocolo OCPP): Available, Charging, Preparing, Finishing, Reserved = operacional (sem falha); Faulted, Unavailable, SuspendedEV = com problema.</p>
@@ -356,9 +357,21 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       document.getElementById("kpi-problem").textContent = problem.toLocaleString("pt-BR");
     }
 
+    // Frota de veículos "carregáveis" (elétrico + híbrido plug-in) por região, a partir
+    // do RENAVAM/SENATRAN (dados abertos, gov.br/transportes) — jul/2026. Atualizado
+    // manualmente (planilha mensal, sem API); ver metodologia na seção abaixo.
+    const FLEET_BY_REGION = {
+      rmsp: 174975,
+      campinas: 46394,
+      "vale-paraiba": 9335,
+      litoral: 6937,
+      sorocaba: 16365,
+      interior: 35327,
+    };
+
     function renderRegionCards() {
       const byRegion = {};
-      for (const r of allRegions) byRegion[r.code] = { name: r.name, estacoes: 0, estacoesComTelemetria: 0, conectores: 0, ac: 0, dc: 0, ok: 0, receita: 0 };
+      for (const r of allRegions) byRegion[r.code] = { name: r.name, estacoes: 0, estacoesComTelemetria: 0, conectores: 0, ac: 0, dc: 0, ok: 0, receita: 0, frota: FLEET_BY_REGION[r.code] || 0 };
       for (const s of allStations) {
         const bucket = byRegion[s.regionCode];
         if (!bucket) continue;
@@ -384,6 +397,8 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
             <div class="flex justify-between"><dt class="text-slate-500">Operacional</dt><dd class="font-semibold">${r.conectores ? Math.round((r.ok / r.conectores) * 100) + "%" : "—"}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">Receita est. (30d)</dt><dd class="font-semibold text-maia-green">${r.receita ? brl(r.receita) : "—"}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-400 pl-2">— média/conector</dt><dd class="text-slate-400">${r.receita && r.conectores ? brl(Math.round(r.receita / r.conectores)) : "—"}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Frota carregável*</dt><dd class="font-semibold">${r.frota.toLocaleString("pt-BR")}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-400 pl-2">— VEs/conector</dt><dd class="text-slate-400">${r.conectores ? Math.round(r.frota / r.conectores).toLocaleString("pt-BR") : "—"}</dd></div>
           </dl>
         </div>
       `).join("");
