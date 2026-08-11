@@ -1,7 +1,7 @@
 ---
 title: "Aumento da energia elétrica em 2026: o que muda para o Grupo A e o Grupo B"
 description: "Entenda quanto a conta de energia deve subir em 2026 segundo a ANEEL, a diferença de impacto entre Grupo A e Grupo B, e o que esperar para 2027."
-publishDate: 2026-08-08
+publishDate: 2026-08-11
 audience: empresas
 ---
 
