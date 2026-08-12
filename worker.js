@@ -84,9 +84,9 @@ async function syncStationsAndSnapshots(env) {
   for (const s of sp) {
     stationStmts.push(
       env.DB.prepare(
-        `INSERT INTO stations (station_id, name, network, lat, lng) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(station_id) DO UPDATE SET name=excluded.name, network=excluded.network, lat=excluded.lat, lng=excluded.lng`
-      ).bind(s._id, s.name || "", s.iconPack || "outra", s.lat, s.lng)
+        `INSERT INTO stations (station_id, name, network, lat, lng, private) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(station_id) DO UPDATE SET name=excluded.name, network=excluded.network, lat=excluded.lat, lng=excluded.lng, private=excluded.private`
+      ).bind(s._id, s.name || "", s.iconPack || "outra", s.lat, s.lng, s.private ? 1 : 0)
     );
     const connectors = s.connectedPlugs || [];
     connectors.forEach((c, idx) => {
@@ -338,7 +338,7 @@ async function buildEletropostosPayload(env, windowKey) {
   const windowHours = windowDays * 24;
 
   const [stationsRes, connectorsRes, latestRes, uptimeRes, pricingRes] = await Promise.all([
-    env.DB.prepare(`SELECT station_id, name, network, lat, lng, source FROM stations`).all(),
+    env.DB.prepare(`SELECT station_id, name, network, lat, lng, source, private FROM stations`).all(),
     env.DB.prepare(`SELECT station_id, connector_index, power, current FROM connector_meta`).all(),
     env.DB.prepare(
       `SELECT ss.station_id, ss.connector_index, ss.state
@@ -417,6 +417,7 @@ async function buildEletropostosPayload(env, windowKey) {
       regionCode: region.code,
       regionName: region.name,
       source: s.source || "tupi",
+      private: !!s.private,
       connectors,
       pricePerKwh: pricing?.price_per_kwh ?? null,
       idleFeeValue: pricing?.idle_fee_enabled ? pricing.idle_fee_value : null,
@@ -469,7 +470,7 @@ const TIMELINE_BUCKET_MS = { "24h": 0, "7d": 3600 * 1000, "15d": 24 * 3600 * 100
 
 async function buildStationDetail(env, stationId) {
   const [stationRow, connectorsRes, pricingRow] = await Promise.all([
-    env.DB.prepare(`SELECT station_id, name, network, lat, lng, source FROM stations WHERE station_id = ?`).bind(stationId).first(),
+    env.DB.prepare(`SELECT station_id, name, network, lat, lng, source, private FROM stations WHERE station_id = ?`).bind(stationId).first(),
     env.DB.prepare(`SELECT connector_index, power, current FROM connector_meta WHERE station_id = ?`).bind(stationId).all(),
     env.DB.prepare(`SELECT price_per_kwh, idle_fee_enabled, idle_fee_value, currency, updated_at FROM station_pricing WHERE station_id = ?`)
       .bind(stationId)
@@ -532,6 +533,7 @@ async function buildStationDetail(env, stationId) {
     name: stationRow.name,
     network: stationRow.network,
     source: stationRow.source || "tupi",
+    private: !!stationRow.private,
     lat: stationRow.lat,
     lng: stationRow.lng,
     connectorCount: totalConnectors,

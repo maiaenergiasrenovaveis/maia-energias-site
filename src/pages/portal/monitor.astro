@@ -100,6 +100,10 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
               <option value="ok">Operacional</option>
               <option value="problema">Com problema</option>
             </select>
+            <label class="flex items-center gap-1.5 text-xs text-slate-500 select-none">
+              <input type="checkbox" id="hide-private-filter" class="rounded border-slate-300" />
+              Ocultar acesso restrito
+            </label>
           </div>
           <p id="search-status" class="text-xs text-slate-400 mt-1"></p>
         </div>
@@ -201,6 +205,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <p><strong>Operacional ≠ em uso:</strong> "operacional" inclui tanto Available (disponível, ocioso, sem ninguém carregando) quanto Charging (carregando de verdade). "Em uso" conta só o estado Charging — um posto pode estar 100% operacional (sem nenhuma falha) e 0% em uso.</p>
         <p><strong>Atualização de status:</strong> um job agendado (a cada 5 min) salva um retrato do status de cada conector em um banco próprio, para calcular disponibilidade e uso ao longo do tempo (não só o instante atual). O histórico começou a ser coletado em 30/07/2026 — janelas maiores (7d, 15d, 30d) vão ficando mais precisas com o tempo.</p>
         <p><strong>Preço e receita estimada:</strong> o preço por kWh vem do endpoint de detalhe de cada posto, coletado aos poucos (~20 postos a cada 5 min, cobertura completa em algumas horas) para não sobrecarregar o servidor da Tupi. Receita estimada = horas em uso (Charging) na janela × <strong>40 kWh por hora de uso</strong> (consumo médio realista de recarga — nenhum carro sustenta a potência nominal do carregador por uma hora inteira, a curva de carga cai bastante depois de ~80% de bateria) × preço (R$/kWh). Não usamos a potência nominal cadastrada na fórmula, propositalmente. É uma <strong>estimativa</strong>, não faturamento real auditado (não há dado de sessões/kWh efetivamente vendido nesta fonte).</p>
+        <p><strong>Acesso restrito:</strong> a própria Tupi marca algumas estações como privadas (hotéis, resorts, clubes, concessionárias, vagas individuais de condomínio/empresa) — cerca de 10% da base em SP. Mantemos essas estações no Monitor, sinalizadas com o selo "Acesso restrito", mas você pode ocultá-las com o filtro acima do mapa se quiser ver só infraestrutura de acesso público.</p>
         <p><strong>Potência com ⚠️:</strong> alguns postos têm potência cadastrada claramente errada na própria Tupi (ex.: vários postos diferentes com exatamente "480kW" em todos os conectores — um valor de placeholder/bug do cadastro deles, não uma leitura real). Sinalizamos com ⚠️ e excluímos esses valores dos totais e do gráfico de potência.</p>
         <p><strong>Janelas maiores (7d/15d/30d/Acumulado) são projeções, não dado acumulado real</strong> enquanto o histórico for curto: pegamos a taxa de uso média já observada e projetamos para o tamanho da janela. Só mostramos % e receita quando há pelo menos 12 leituras (1h) para aquele conector — abaixo disso aparece "coletando…", para não exibir números como "100% de uso" que seriam só ruído de amostra pequena (ex.: 1 leitura que por acaso pegou o carregador em uso).</p>
       </section>
@@ -323,6 +328,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         search: document.getElementById("search-input").value.toLowerCase(),
         network: document.getElementById("network-filter").value,
         status: document.getElementById("status-filter").value,
+        hidePrivate: document.getElementById("hide-private-filter").checked,
       };
     }
 
@@ -333,6 +339,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         if (!ignoreSearch && f.search && !s.name.toLowerCase().includes(f.search) && !s.network.toLowerCase().includes(f.search)) return false;
         if (f.network && s.network !== f.network) return false;
         if (f.status && stationStatus(s) !== f.status) return false;
+        if (f.hidePrivate && s.private) return false;
         return true;
       });
     }
@@ -495,8 +502,11 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
           goelectric: ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 align-middle">GE</span>',
         };
         const sourceBadge = sourceBadges[s.source] || "";
+        const privateBadge = s.private
+          ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 align-middle">Acesso restrito</span>'
+          : "";
         return `<tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="window.__openStationDetail('${s.id}')">
-          <td class="py-2 pr-2 font-medium text-maia-navy">${s.name}${sourceBadge}</td>
+          <td class="py-2 pr-2 font-medium text-maia-navy">${s.name}${sourceBadge}${privateBadge}</td>
           <td class="py-2 pr-2 text-slate-500">${s.network}</td>
           <td class="py-2 pr-2 text-slate-500">${s.regionName}</td>
           <td class="py-2 pr-2 text-slate-500">${connectorSummary}</td>
@@ -548,7 +558,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         const status = stationStatus(s);
         const color = status === "ok" ? "#5fa746" : status === "problema" ? "#ef4444" : "#94a3b8";
         const marker = L.circleMarker([s.lat, s.lng], { radius: 6, color, fillColor: color, fillOpacity: 0.85, weight: 1 })
-          .bindPopup(`<strong>${s.name}</strong><br>${s.network}<br>${s.connectors.map((c) => `${connectorPowerLabel(c)} · ${c.state || "?"}`).join("<br>") || "sem dado de conector"}<br><a href="#" onclick="window.__openStationDetail('${s.id}');return false;">Ver detalhes →</a>`)
+          .bindPopup(`<strong>${s.name}</strong>${s.private ? ' <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#e2e8f0;color:#475569;">Acesso restrito</span>' : ""}<br>${s.network}<br>${s.connectors.map((c) => `${connectorPowerLabel(c)} · ${c.state || "?"}`).join("<br>") || "sem dado de conector"}<br><a href="#" onclick="window.__openStationDetail('${s.id}');return false;">Ver detalhes →</a>`)
           .addTo(markersLayer);
         if (!isGeocodeFallback) {
           bounds.push([s.lat, s.lng]);
@@ -656,7 +666,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       if (hasStationMatch) return;
       geocodeTimer = setTimeout(() => tryGeocode(query), 600);
     });
-    ["network-filter", "status-filter"].forEach((id) => {
+    ["network-filter", "status-filter", "hide-private-filter"].forEach((id) => {
       document.getElementById(id).addEventListener("input", () => { renderStationsTable(); renderMap(); });
     });
     document.getElementById("refresh-btn").addEventListener("click", () => load());
@@ -723,7 +733,8 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
       const res = await fetch("/portal/api/eletropostos-sp/estacao?id=" + encodeURIComponent(id));
       if (!res.ok) throw new Error("detail not found");
       const d = await res.json();
-      document.getElementById("detail-name").textContent = d.name || "(sem nome)";
+      document.getElementById("detail-name").innerHTML = (d.name || "(sem nome)") +
+        (d.private ? ' <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 align-middle">Acesso restrito</span>' : "");
       const sourceLabels = { clubecharger: " · via ClubeCharger", goelectric: " · via GO Electric" };
       document.getElementById("detail-network").textContent = d.network + (sourceLabels[d.source] || " · via Tupi");
       document.getElementById("detail-connectors").textContent = d.connectorCount;

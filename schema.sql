@@ -9,7 +9,9 @@ CREATE TABLE stations (
   name TEXT,
   network TEXT,
   lat REAL,
-  lng REAL
+  lng REAL,
+  source TEXT DEFAULT 'tupi',
+  private INTEGER DEFAULT 0
 );
 
 CREATE TABLE connector_meta (
