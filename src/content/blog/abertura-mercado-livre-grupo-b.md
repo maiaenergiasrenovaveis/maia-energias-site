@@ -1,7 +1,7 @@
 ---
 title: "Abertura do mercado livre para o Grupo B: cronograma até 2028 e o desconto real"
 description: "Entenda o cronograma de abertura do mercado livre de energia para o Grupo B (Lei 15.269/2025 e Decreto 13.097/2026): datas, quem pode aderir e por que o desconto real é menor do que parece."
-publishDate: 2026-08-18
+publishDate: 2026-08-15
 audience: empresas
 ---
 
