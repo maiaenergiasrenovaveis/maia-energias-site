@@ -1,7 +1,7 @@
 ---
 title: "O que é SPE e como ela protege o investidor em usina solar"
 description: "Entenda o que é uma SPE (Sociedade de Propósito Específico), por que ela é usada para estruturar o investimento em usina solar e como isso protege o patrimônio do investidor."
-publishDate: 2026-08-15
+publishDate: 2026-08-18
 audience: investidores
 ---
 
