@@ -1,7 +1,7 @@
 ---
 title: "O que é fator de potência e por que ele pode estar encarecendo sua conta de energia"
 description: "Entenda o que é fator de potência, por que ele gera cobrança adicional na conta de energia de empresas e como o banco de capacitores corrige esse problema."
-publishDate: 2026-08-18
+publishDate: 2026-08-24
 audience: empresas
 ---
 
