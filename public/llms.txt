@@ -1,6 +1,6 @@
 # Maia Energias Renováveis
 
-> Empresa brasileira que atua em duas frentes do setor de energia: estruturação de investimentos em usinas solares fotovoltaicas (para investidores pessoa física ou jurídica) e eficiência energética para empresas com contas de energia elétrica acima de R$50 mil por mês.
+> Empresa brasileira que atua em múltiplas frentes do setor de energia: estruturação de investimentos em usinas solares fotovoltaicas (para investidores pessoa física ou jurídica), eficiência energética para empresas com contas de energia elétrica acima de R$50 mil por mês, instalação de energia solar em São Paulo e venda/instalação de eletropostos (carregadores para veículos elétricos).
 
 ## Investidores
 - Investimento inicial a partir de R$300 mil (usina ~120kWp).
@@ -22,6 +22,12 @@
 - Público: comércios, condomínios e residências com consumo acima de 10.000 kWh por mês.
 - Dois modelos disponíveis: instalação própria (à vista ou financiada, sistema no nome do cliente) ou Energy as a Service (EaaS, sem aporte de capital, cliente paga pela energia consumida).
 - Página: /solar-sp
+
+## Eletropostos (venda e instalação de carregadores para veículos elétricos)
+- Potências disponíveis: 60kW, 80kW, 120kW, 160kW e 180kW.
+- Público: condomínios, comércios e empresas (estacionamentos, shoppings, hotéis), postos de combustível e redes de carregamento público, frotas corporativas.
+- Dois modelos: compra do equipamento (instalação e manutenção contratável) ou comodato/EaaS (sem investimento inicial).
+- Página: /eletropostos
 
 ## Institucional
 - Fundador: Ricardo Maia, engenheiro eletricista com 30 anos de experiência no setor de energia (incluindo hidrelétricas no Brasil e atuação na Alemanha).

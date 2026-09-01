@@ -179,3 +179,43 @@ export const solarSpFaq: FaqItem[] = [
       "A economia depende do perfil de consumo, da estrutura elétrica do local e do modelo escolhido (instalação própria ou EaaS) — os valores são calculados individualmente após a análise técnica, sem percentual fixo ou garantido.",
   },
 ];
+
+// FAQ específico da oferta de venda e instalação de eletropostos (carregadores
+// para veículos elétricos).
+export const eletropostosFaq: FaqItem[] = [
+  {
+    question: "Quais potências de eletropostos a Maia instala?",
+    answer:
+      "A Maia trabalha com eletropostos de 60kW, 80kW, 120kW, 160kW e 180kW. A potência ideal é definida conforme o perfil de uso — número de veículos, tempo médio de permanência e capacidade elétrica disponível no local.",
+  },
+  {
+    question: "Qual a diferença entre comprar o eletroposto e o modelo comodato/EaaS?",
+    answer:
+      "Na compra, o cliente adquire o equipamento e a Maia cuida da instalação (com manutenção contratável à parte). No modelo comodato/EaaS, não há investimento inicial: a Maia instala e mantém o equipamento, e o cliente paga conforme o uso ou um modelo de serviço combinado.",
+  },
+  {
+    question: "Como funciona a cobrança dos usuários em um eletroposto de condomínio?",
+    answer:
+      "Depende do modelo escolhido pelo condomínio — pode ser incluído no rateio das áreas comuns, cobrado por uso individual do morador, ou operado como um ponto de recarga que gera receita para o condomínio. A Maia apresenta as opções compatíveis com cada caso.",
+  },
+  {
+    question: "Quanto tempo leva a instalação de um eletroposto?",
+    answer:
+      "O prazo varia conforme a potência do equipamento, a infraestrutura elétrica já disponível no local e a necessidade de adequações na rede. Isso é definido após a análise técnica do local.",
+  },
+  {
+    question: "É possível instalar um eletroposto de alta potência (120kW ou mais) em qualquer lugar?",
+    answer:
+      "Depende da capacidade elétrica disponível no local — demanda contratada e infraestrutura da rede. A Maia avalia tecnicamente se o local suporta a potência desejada ou se são necessárias adequações antes da instalação.",
+  },
+  {
+    question: "A Maia oferece manutenção para os eletropostos instalados?",
+    answer:
+      "Sim. Além da venda e instalação, é possível contratar manutenção contínua para garantir a disponibilidade e o funcionamento do equipamento ao longo do tempo.",
+  },
+  {
+    question: "Postos de combustível podem instalar eletropostos de recarga rápida?",
+    answer:
+      "Sim — as potências mais altas (120kW a 180kW) são indicadas justamente para recarga rápida em locais de alto fluxo, como postos de combustível e redes de carregamento público.",
+  },
+];
