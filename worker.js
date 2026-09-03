@@ -36,6 +36,31 @@ const MAX_PLAUSIBLE_POWER_KW = 400;
 // igual à metodologia do Zeus Eletrik (referência usada para este portal).
 const ENERGY_PER_HOUR_KWH = 40;
 
+// Janelas 15d/30d/acumulado usam o agregado diário (connector_daily_stats) em vez de
+// somar status_snapshots bruto — reprocessar meses de leitura a cada carregamento de
+// página não escala (chegou a levar ~20s com o histórico atual). 24h/7d continuam lendo
+// direto do bruto, que é pequeno o bastante pra não precisar da tabela agregada.
+const RAW_SCAN_WINDOWS = new Set(["24h", "7d"]);
+const DAY_MS = 24 * 3600 * 1000;
+function dayBucket(ms) {
+  return Math.floor(ms / DAY_MS) * DAY_MS;
+}
+
+// Upsert incremental do agregado diário — chamado uma vez por conector a cada tick,
+// junto com o INSERT em status_snapshots, pra manter connector_daily_stats sempre
+// em dia sem precisar reprocessar nada depois.
+function rollupStmt(env, stationId, connectorIndex, state, capturedAt) {
+  const ok = OPERATIONAL_STATES.has(state) ? 1 : 0;
+  const charging = state === "Charging" ? 1 : 0;
+  return env.DB.prepare(
+    `INSERT INTO connector_daily_stats (station_id, connector_index, day, samples, ok_samples, charging_samples) VALUES (?, ?, ?, 1, ?, ?)
+     ON CONFLICT(station_id, connector_index, day) DO UPDATE SET
+       samples = samples + 1,
+       ok_samples = ok_samples + excluded.ok_samples,
+       charging_samples = charging_samples + excluded.charging_samples`
+  ).bind(stationId, connectorIndex, dayBucket(capturedAt), ok, charging);
+}
+
 function chunk(arr, size) {
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -80,6 +105,7 @@ async function syncStationsAndSnapshots(env) {
   const stationStmts = [];
   const connectorStmts = [];
   const snapshotStmts = [];
+  const rollupStmts = [];
 
   for (const s of sp) {
     stationStmts.push(
@@ -96,20 +122,23 @@ async function syncStationsAndSnapshots(env) {
            ON CONFLICT(station_id, connector_index) DO UPDATE SET power=excluded.power, current=excluded.current`
         ).bind(s._id, idx, c.power ?? null, c.current ?? null)
       );
+      const state = c.stateName || "Desconhecido";
       snapshotStmts.push(
         env.DB.prepare(`INSERT INTO status_snapshots (station_id, connector_index, state, captured_at) VALUES (?, ?, ?, ?)`).bind(
           s._id,
           idx,
-          c.stateName || "Desconhecido",
+          state,
           now
         )
       );
+      rollupStmts.push(rollupStmt(env, s._id, idx, state, now));
     });
   }
 
   await runBatches(env.DB, stationStmts);
   await runBatches(env.DB, connectorStmts);
   await runBatches(env.DB, snapshotStmts);
+  await runBatches(env.DB, rollupStmts);
 
   // Prune snapshots older than 30 days to keep the table bounded
   await env.DB.prepare(`DELETE FROM status_snapshots WHERE captured_at < ?`).bind(now - 30 * 24 * 3600 * 1000).run();
@@ -211,6 +240,7 @@ async function syncClubeCharger(env) {
   const stationStmts = [];
   const connectorStmts = [];
   const snapshotStmts = [];
+  const rollupStmts = [];
   const pricingStmts = [];
 
   for (const s of sp) {
@@ -232,14 +262,16 @@ async function syncClubeCharger(env) {
            ON CONFLICT(station_id, connector_index) DO UPDATE SET power=excluded.power, current=excluded.current`
         ).bind(stationId, idx, power, current)
       );
+      const state = normalizeCcStatus(c.status);
       snapshotStmts.push(
         env.DB.prepare(`INSERT INTO status_snapshots (station_id, connector_index, state, captured_at) VALUES (?, ?, ?, ?)`).bind(
           stationId,
           idx,
-          normalizeCcStatus(c.status),
+          state,
           now
         )
       );
+      rollupStmts.push(rollupStmt(env, stationId, idx, state, now));
     });
 
     const price = parseBRNumber(s.pricing && s.pricing.active_price_label);
@@ -256,6 +288,7 @@ async function syncClubeCharger(env) {
   await runBatches(env.DB, stationStmts);
   await runBatches(env.DB, connectorStmts);
   await runBatches(env.DB, snapshotStmts);
+  await runBatches(env.DB, rollupStmts);
   await runBatches(env.DB, pricingStmts);
 }
 
@@ -331,13 +364,60 @@ async function runTick(env) {
   await syncGoElectric(env);
 }
 
+// Uso/disponibilidade por conector numa janela — lê status_snapshots bruto pras janelas
+// curtas (24h/7d, poucas linhas) e o agregado connector_daily_stats pras longas
+// (15d/30d/acumulado), que senão viram uma varredura de milhões de linhas a cada
+// carregamento de página (ver RAW_SCAN_WINDOWS).
+async function getUptimeStats(env, windowKey, sinceMs) {
+  const statsByKey = new Map();
+  const res = RAW_SCAN_WINDOWS.has(windowKey)
+    ? await env.DB.prepare(
+        `SELECT station_id, connector_index,
+           AVG(CASE WHEN state IN ('Available','Charging','Preparing','Finishing','Reserved') THEN 1.0 ELSE 0.0 END) AS uptime_pct,
+           AVG(CASE WHEN state = 'Charging' THEN 1.0 ELSE 0.0 END) AS utilization_pct,
+           COUNT(*) AS samples
+         FROM status_snapshots WHERE captured_at > ? GROUP BY station_id, connector_index`
+      ).bind(sinceMs).all()
+    : await env.DB.prepare(
+        `SELECT station_id, connector_index,
+           SUM(ok_samples) * 1.0 / SUM(samples) AS uptime_pct,
+           SUM(charging_samples) * 1.0 / SUM(samples) AS utilization_pct,
+           SUM(samples) AS samples
+         FROM connector_daily_stats WHERE day >= ? GROUP BY station_id, connector_index`
+      ).bind(dayBucket(sinceMs)).all();
+  for (const u of res.results)
+    statsByKey.set(u.station_id + ":" + u.connector_index, { pct: u.uptime_pct, utilization: u.utilization_pct, samples: u.samples });
+  return statsByKey;
+}
+
+// Mesma ideia que getUptimeStats, mas escopado a uma estação só (usado no modal de
+// detalhe, que já tinha essa lógica por conector separada da lista).
+async function getStationConnectorStats(env, stationId, windowKey, sinceMs) {
+  const res = RAW_SCAN_WINDOWS.has(windowKey)
+    ? await env.DB.prepare(
+        `SELECT connector_index,
+                AVG(CASE WHEN state = 'Charging' THEN 1.0 ELSE 0.0 END) AS utilization_pct,
+                AVG(CASE WHEN state IN ('Available','Charging','Preparing','Finishing','Reserved') THEN 1.0 ELSE 0.0 END) AS uptime_pct,
+                COUNT(*) AS samples
+         FROM status_snapshots WHERE station_id = ? AND captured_at > ? GROUP BY connector_index`
+      ).bind(stationId, sinceMs).all()
+    : await env.DB.prepare(
+        `SELECT connector_index,
+                SUM(charging_samples) * 1.0 / SUM(samples) AS utilization_pct,
+                SUM(ok_samples) * 1.0 / SUM(samples) AS uptime_pct,
+                SUM(samples) AS samples
+         FROM connector_daily_stats WHERE station_id = ? AND day >= ? GROUP BY connector_index`
+      ).bind(stationId, dayBucket(sinceMs)).all();
+  return res.results;
+}
+
 async function buildEletropostosPayload(env, windowKey) {
   const now = Date.now();
   const windowDays = WINDOW_DAYS[windowKey] ?? 30;
   const since = windowKey === "all" ? 0 : now - windowDays * 24 * 3600 * 1000;
   const windowHours = windowDays * 24;
 
-  const [stationsRes, connectorsRes, latestRes, uptimeRes, pricingRes] = await Promise.all([
+  const [stationsRes, connectorsRes, latestRes, statsByKey, pricingRes] = await Promise.all([
     env.DB.prepare(`SELECT station_id, name, network, lat, lng, source, private FROM stations`).all(),
     env.DB.prepare(`SELECT station_id, connector_index, power, current FROM connector_meta`).all(),
     env.DB.prepare(
@@ -345,16 +425,10 @@ async function buildEletropostosPayload(env, windowKey) {
        FROM status_snapshots ss
        INNER JOIN (
          SELECT station_id, connector_index, MAX(captured_at) AS max_captured
-         FROM status_snapshots GROUP BY station_id, connector_index
+         FROM status_snapshots WHERE captured_at > ? GROUP BY station_id, connector_index
        ) latest ON ss.station_id = latest.station_id AND ss.connector_index = latest.connector_index AND ss.captured_at = latest.max_captured`
-    ).all(),
-    env.DB.prepare(
-      `SELECT station_id, connector_index,
-         AVG(CASE WHEN state IN ('Available','Charging','Preparing','Finishing','Reserved') THEN 1.0 ELSE 0.0 END) AS uptime_pct,
-         AVG(CASE WHEN state = 'Charging' THEN 1.0 ELSE 0.0 END) AS utilization_pct,
-         COUNT(*) AS samples
-       FROM status_snapshots WHERE captured_at > ? GROUP BY station_id, connector_index`
-    ).bind(since).all(),
+    ).bind(now - 3 * DAY_MS).all(),
+    getUptimeStats(env, windowKey, since),
     env.DB.prepare(`SELECT station_id, price_per_kwh, idle_fee_enabled, idle_fee_value, currency, updated_at FROM station_pricing`).all(),
   ]);
 
@@ -365,9 +439,6 @@ async function buildEletropostosPayload(env, windowKey) {
   }
   const latestByKey = new Map();
   for (const l of latestRes.results) latestByKey.set(l.station_id + ":" + l.connector_index, l.state);
-  const statsByKey = new Map();
-  for (const u of uptimeRes.results)
-    statsByKey.set(u.station_id + ":" + u.connector_index, { pct: u.uptime_pct, utilization: u.utilization_pct, samples: u.samples });
   const pricingByStation = new Map();
   for (const p of pricingRes.results) pricingByStation.set(p.station_id, p);
 
@@ -492,16 +563,8 @@ async function buildStationDetail(env, stationId) {
     timelineByWindow[key] = await buildTimeline(env, stationId, since, TIMELINE_BUCKET_MS[key]);
     // Por conector, não agregado — cada conector tem seu próprio teto de potência
     // (um AC de 22kW não entrega 40kWh/h só porque a média inclui um DC de 150kW).
-    const perConn = await env.DB.prepare(
-      `SELECT connector_index,
-              AVG(CASE WHEN state = 'Charging' THEN 1.0 ELSE 0.0 END) AS utilization_pct,
-              AVG(CASE WHEN state IN ('Available','Charging','Preparing','Finishing','Reserved') THEN 1.0 ELSE 0.0 END) AS uptime_pct,
-              COUNT(*) AS samples
-       FROM status_snapshots WHERE station_id = ? AND captured_at > ? GROUP BY connector_index`
-    )
-      .bind(stationId, since)
-      .all();
-    const rows = perConn.results.filter((r) => r.samples >= MIN_SAMPLES_FOR_ESTIMATE);
+    const perConnResults = await getStationConnectorStats(env, stationId, key, since);
+    const rows = perConnResults.filter((r) => r.samples >= MIN_SAMPLES_FOR_ESTIMATE);
     const enough = rows.length > 0;
 
     let revenue = null;
@@ -518,7 +581,7 @@ async function buildStationDetail(env, stationId) {
     const stats = {
       utilization_pct: enough ? rows.reduce((a, r) => a + r.utilization_pct, 0) / rows.length : null,
       uptime_pct: enough ? rows.reduce((a, r) => a + r.uptime_pct, 0) / rows.length : null,
-      samples: perConn.results.reduce((a, r) => a + r.samples, 0),
+      samples: perConnResults.reduce((a, r) => a + r.samples, 0),
     };
     revenueByWindow[key] = {
       revenue,
@@ -546,22 +609,40 @@ async function buildStationDetail(env, stationId) {
   };
 }
 
-async function handleEletropostosSP(request, env) {
-  const url = new URL(request.url);
-  const windowKey = WINDOW_DAYS[url.searchParams.get("window")] ? url.searchParams.get("window") : "30d";
-  const payload = await buildEletropostosPayload(env, windowKey);
-  return new Response(JSON.stringify(payload), {
-    headers: { "content-type": "application/json", "cache-control": "public, max-age=60" },
+// Cache de borda (por colo) pras respostas da API do portal — segunda camada de defesa
+// além do agregado diário: mesmo com a query rápida, sem isso cada visita recalcula o
+// payload do zero. Chave = URL completa (inclui window=/id=, então cada variação tem
+// sua própria entrada). Só cacheia resposta 200.
+async function withEdgeCache(request, ctx, buildResponse) {
+  const cache = caches.default;
+  const cacheKey = new Request(new URL(request.url).toString(), { method: "GET" });
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+  const response = await buildResponse();
+  if (response.status === 200) ctx.waitUntil(cache.put(cacheKey, response.clone()));
+  return response;
+}
+
+async function handleEletropostosSP(request, env, ctx) {
+  return withEdgeCache(request, ctx, async () => {
+    const url = new URL(request.url);
+    const windowKey = WINDOW_DAYS[url.searchParams.get("window")] ? url.searchParams.get("window") : "30d";
+    const payload = await buildEletropostosPayload(env, windowKey);
+    return new Response(JSON.stringify(payload), {
+      headers: { "content-type": "application/json", "cache-control": "public, max-age=60" },
+    });
   });
 }
 
-async function handleStationDetail(request, env) {
-  const url = new URL(request.url);
-  const id = url.searchParams.get("id");
-  if (!id) return new Response(JSON.stringify({ error: "missing_id" }), { status: 400, headers: { "content-type": "application/json" } });
-  const detail = await buildStationDetail(env, id);
-  if (!detail) return new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "content-type": "application/json" } });
-  return new Response(JSON.stringify(detail), { headers: { "content-type": "application/json", "cache-control": "public, max-age=60" } });
+async function handleStationDetail(request, env, ctx) {
+  return withEdgeCache(request, ctx, async () => {
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+    if (!id) return new Response(JSON.stringify({ error: "missing_id" }), { status: 400, headers: { "content-type": "application/json" } });
+    const detail = await buildStationDetail(env, id);
+    if (!detail) return new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify(detail), { headers: { "content-type": "application/json", "cache-control": "public, max-age=60" } });
+  });
 }
 
 // Geocodificação de ruas/estabelecimentos via Nominatim (OpenStreetMap), usada como
@@ -631,12 +712,12 @@ function withSecurityHeaders(response, hostname) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-async function handleFetch(request, env) {
+async function handleFetch(request, env, ctx) {
   const url = new URL(request.url);
 
   if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/eletropostos-sp") {
     try {
-      return await handleEletropostosSP(request, env);
+      return await handleEletropostosSP(request, env, ctx);
     } catch (err) {
       return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { "content-type": "application/json" } });
     }
@@ -644,7 +725,7 @@ async function handleFetch(request, env) {
 
   if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/eletropostos-sp/estacao") {
     try {
-      return await handleStationDetail(request, env);
+      return await handleStationDetail(request, env, ctx);
     } catch (err) {
       return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { "content-type": "application/json" } });
     }
@@ -671,8 +752,8 @@ async function handleFetch(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
-    const response = await handleFetch(request, env);
+  async fetch(request, env, ctx) {
+    const response = await handleFetch(request, env, ctx);
     return withSecurityHeaders(response, new URL(request.url).hostname);
   },
 
