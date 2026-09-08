@@ -5,18 +5,62 @@ import Testimonials from "../components/Testimonials.astro";
 ---
 
 <BaseLayout
-  title="Investimento em Energia Solar e Eficiência Energética"
-  description="Investimento em usinas solares para investidores e eficiência energética para empresas com contas de energia acima de R$50 mil por mês."
+  title="Reduza o Custo e o Risco da Energia da Sua Empresa"
+  description="A Maia estrutura soluções de eficiência energética, mercado livre, BESS, subestações, energia solar e recarga para empresas, e investimento em usinas solares para investidores."
 >
   <section class="bg-gradient-to-b from-maia-navy to-maia-navy-dark text-white">
     <div class="mx-auto max-w-6xl px-4 py-20 text-center">
       <h1 class="text-3xl md:text-5xl font-bold leading-tight max-w-3xl mx-auto">
-        A Maia transforma energia em valor
+        Reduza o custo e o risco da energia da sua empresa
       </h1>
       <p class="mt-6 text-lg text-white/80 max-w-2xl mx-auto">
-        Estruturamos ativos reais de energia solar para investidores e implementamos soluções de
-        eficiência energética para empresas que querem reduzir o custo da sua conta de luz.
+        A Maia estrutura soluções de eficiência, mercado livre, BESS, subestações, energia solar e
+        recarga elétrica para empresas comerciais e industriais. Analisamos sua conta, perfil de
+        carga, infraestrutura e operação antes de recomendar qualquer investimento.
       </p>
+      <div class="mt-8 flex flex-wrap justify-center gap-3">
+        <WhatsappCta message="Olá! Quero solicitar um diagnóstico energético para minha empresa." label="Solicitar diagnóstico energético" />
+        <a href="/empresas" class="inline-flex items-center rounded-full border-2 border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white hover:text-maia-navy transition-colors">
+          Conhecer soluções para empresas
+        </a>
+        <a href="/investidores" class="inline-flex items-center rounded-full border-2 border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white hover:text-maia-navy transition-colors">
+          Conhecer investimentos em usinas solares
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-4xl px-4 py-16 text-center">
+    <h2 class="text-2xl font-bold text-maia-navy">Antes de comprar equipamentos, entenda o projeto</h2>
+    <p class="mt-4 text-slate-600 leading-relaxed max-w-2xl mx-auto">
+      A Maia compara eficiência, tarifa, demanda, mercado livre, solar, armazenamento, subestação e
+      recarga para indicar o que realmente faz sentido para a operação do cliente. Em alguns casos,
+      a conclusão correta pode ser não investir em determinada tecnologia.
+    </p>
+  </section>
+
+  <section class="bg-slate-50">
+    <div class="mx-auto max-w-6xl px-4 py-16">
+      <h2 class="text-2xl font-bold text-maia-navy text-center">Como trabalhamos</h2>
+      <ol class="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {
+          [
+            "Coleta de dados e entendimento da operação",
+            "Diagnóstico técnico e energético",
+            "Modelagem de cenários e investimentos",
+            "Recomendação go/no-go",
+            "Implementação coordenada",
+            "Medição, verificação e gestão contínua",
+          ].map((step, i) => (
+            <li class="rounded-xl border border-slate-200 bg-white p-6 flex gap-4">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-maia-orange text-sm font-bold text-maia-navy">
+                {i + 1}
+              </span>
+              <span class="text-slate-600 leading-relaxed pt-1">{step}</span>
+            </li>
+          ))
+        }
+      </ol>
     </div>
   </section>
 
@@ -36,14 +80,15 @@ import Testimonials from "../components/Testimonials.astro";
     </div>
     <div class="rounded-2xl border border-slate-200 p-8">
       <span class="text-sm font-semibold uppercase tracking-wide text-maia-blue">Para empresas</span>
-      <h2 class="mt-2 text-2xl font-bold text-maia-navy">Reduza o custo da sua energia</h2>
+      <h2 class="mt-2 text-2xl font-bold text-maia-navy">Energia como vantagem operacional</h2>
       <p class="mt-4 text-slate-600 leading-relaxed">
-        Para empresas com contas acima de R$50 mil por mês: diagnóstico técnico e financeiro para
-        identificar desperdícios, cobranças indevidas e oportunidades de redução no custo energético.
+        Reduza desperdícios, demanda, riscos de interrupção e decisões de investimento mal
+        dimensionadas com uma análise integrada da sua operação — para empresas com contas de
+        energia acima de R$50 mil por mês.
       </p>
       <div class="mt-6 flex flex-wrap gap-3">
         <a href="/empresas" class="inline-flex items-center rounded-full border-2 border-maia-navy px-6 py-3 text-sm font-semibold text-maia-navy hover:bg-maia-navy hover:text-white transition-colors">
-          Solicitar diagnóstico
+          Solicitar uma análise inicial
         </a>
       </div>
     </div>
