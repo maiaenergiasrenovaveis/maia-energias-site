@@ -434,6 +434,7 @@ function computeSolar() {
   `;
 
   $("s-conta-mes1").innerHTML = `
+    ${linhaHtml("Consumo médio usado no cálculo", `${num(dim.consumoMedioMensal, 0)} kWh/mês`)}
     ${linhaHtml("Conta sem solar", brl2(conta.contaSemSolar))}
     ${linhaHtml("Conta com solar", brl2(conta.contaComSolar))}
     ${linhaHtml("Desconto mensal", `${brl2(conta.descontoReais)} (${pct(conta.descontoPercent)})`)}
