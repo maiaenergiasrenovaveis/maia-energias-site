@@ -144,7 +144,12 @@ export function calcularCenariosGrupoA(p) {
     const custoAquisicaoMensal = p.modoAquisicao === "eaas" ? mensalidadeEaasLiquida : 0;
     const custoComBessTotal = comBess.total + custoAquisicaoMensal;
 
-    const economiaMensal = atual.total - custoComBessTotal;
+    // Economia de energia (efeito do BESS/ML na conta) — sempre a mesma, não depende
+    // de como o cliente paga o equipamento. O resultado líquido é que muda: no CAPEX
+    // o financiamento não entra na conta mensal (é o investimento, tratado à parte no
+    // payback); no EaaS a mensalidade é descontada da economia mês a mês.
+    const economiaEnergiaMensal = atual.total - comBess.total;
+    const resultadoLiquidoMensal = atual.total - custoComBessTotal;
 
     linhas.push({
       ano: (p.anoInicial ?? new Date().getFullYear()) + i,
@@ -155,17 +160,32 @@ export function calcularCenariosGrupoA(p) {
       usouMercadoLivre: usarMercadoLivre,
       mensalidadeEaasNominal: p.modoAquisicao === "eaas" ? mensalidadeEaas : 0,
       mensalidadeEaasLiquida: p.modoAquisicao === "eaas" ? mensalidadeEaasLiquida : 0,
-      economiaMensal,
-      economiaAnual: economiaMensal * 12,
+      economiaEnergiaMensal,
+      economiaEnergiaAnual: economiaEnergiaMensal * 12,
+      resultadoLiquidoMensal,
+      resultadoLiquidoAnual: resultadoLiquidoMensal * 12,
     });
   }
 
-  const economiaMensalAno1 = linhas[0].economiaMensal;
+  const economiaEnergiaMensalAno1 = linhas[0].economiaEnergiaMensal;
+  const resultadoLiquidoMensalAno1 = linhas[0].resultadoLiquidoMensal;
   const investimento = p.modoAquisicao === "eaas" ? 0 : p.investimentoBess ?? 0;
-  const paybackMeses = investimento > 0 && economiaMensalAno1 > 0 ? investimento / economiaMensalAno1 : null;
-  const economiaTotalHorizonte = linhas.reduce((acc, l) => acc + l.economiaAnual, 0);
+  const paybackMeses = investimento > 0 && economiaEnergiaMensalAno1 > 0 ? investimento / economiaEnergiaMensalAno1 : null;
+  const economiaEnergiaTotalHorizonte = linhas.reduce((acc, l) => acc + l.economiaEnergiaAnual, 0);
+  const resultadoLiquidoTotalHorizonte = linhas.reduce((acc, l) => acc + l.resultadoLiquidoAnual, 0);
 
-  return { linhas, economiaMensalAno1, investimento, paybackMeses, economiaTotalHorizonte, usarMercadoLivre, lucroReal, fatorCreditoTributario };
+  return {
+    linhas,
+    economiaEnergiaMensalAno1,
+    resultadoLiquidoMensalAno1,
+    investimento,
+    paybackMeses,
+    economiaEnergiaTotalHorizonte,
+    resultadoLiquidoTotalHorizonte,
+    usarMercadoLivre,
+    lucroReal,
+    fatorCreditoTributario,
+  };
 }
 
 /**

@@ -505,19 +505,22 @@ function computeBess() {
 
   ultimoResultadoBess = { bess, cenarios, modoAquisicao };
 
+  const l1 = cenarios.linhas[0];
   const cards = [
     cardHtml("Potência BESS", `${num(bess.potenciaRecomendadaKw, 1)} kW`),
     cardHtml("Capacidade BESS", `${num(bess.capacidadeFinalKwh, 1)} kWh`),
-    cardHtml("Economia mensal (ano 1)", brl(cenarios.economiaMensalAno1)),
-    cardHtml(
-      modoAquisicao === "capex" ? "Payback" : "Economia total do horizonte",
-      modoAquisicao === "capex" ? (cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—") : brl(cenarios.economiaTotalHorizonte)
-    ),
+    // Economia de energia (efeito do BESS/ML na conta) — igual nos dois modos de aquisição,
+    // não é afetada pela forma de pagamento do equipamento.
+    cardHtml("Economia de energia (mês, ano 1)", brl(cenarios.economiaEnergiaMensalAno1)),
   ];
-  if (modoAquisicao === "eaas" && cenarios.lucroReal) {
-    const l1 = cenarios.linhas[0];
-    cards.push(cardHtml("Mensalidade EaaS (nominal)", brl2(l1.mensalidadeEaasNominal)));
-    cards.push(cardHtml("Mensalidade EaaS (líquida, Lucro Real)", brl2(l1.mensalidadeEaasLiquida)));
+  if (modoAquisicao === "capex") {
+    cards.push(cardHtml("Payback", cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—"));
+  } else {
+    cards.push(cardHtml("Mensalidade EaaS", brl2(cenarios.lucroReal ? l1.mensalidadeEaasLiquida : l1.mensalidadeEaasNominal)));
+    cards.push(cardHtml("Resultado líquido mensal (após mensalidade)", brl2(cenarios.resultadoLiquidoMensalAno1)));
+    if (cenarios.lucroReal) {
+      cards.push(cardHtml("Mensalidade EaaS (nominal, sem crédito)", brl2(l1.mensalidadeEaasNominal)));
+    }
   }
   $("b-result-cards").innerHTML = cards.join("");
 
@@ -567,10 +570,10 @@ async function exportarPdfBess() {
 
   const tabelaFinanceira = [
     ["Conta atual (mensal, mercado regulado)", brl2(cenarios.linhas[0].contaAtual)],
-    [`Conta com BESS${mlSufixo} (mensal)`, brl2(cenarios.linhas[0].contaComBess)],
-    ["Economia mensal estimada", brl2(cenarios.economiaMensalAno1)],
-    ["Economia anual acumulada (ano 1)", brl(cenarios.linhas[0].economiaAnual)],
-    [`Economia total (${cenarios.linhas.length} anos)`, brl(cenarios.economiaTotalHorizonte)],
+    [`Conta com BESS${mlSufixo} — só energia (mensal)`, brl2(cenarios.linhas[0].contaAtual - cenarios.economiaEnergiaMensalAno1)],
+    ["Economia de energia estimada (mensal)", brl2(cenarios.economiaEnergiaMensalAno1)],
+    ["Economia de energia acumulada (ano 1)", brl(cenarios.linhas[0].economiaEnergiaAnual)],
+    [`Economia de energia total (${cenarios.linhas.length} anos)`, brl(cenarios.economiaEnergiaTotalHorizonte)],
   ];
   if (modoAquisicao === "capex") {
     tabelaFinanceira.push(["Tempo de retorno (payback)", cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—"]);
@@ -579,6 +582,8 @@ async function exportarPdfBess() {
     if (cenarios.lucroReal) {
       tabelaFinanceira.push(["Mensalidade líquida (Lucro Real)", brl2(cenarios.linhas[0].mensalidadeEaasLiquida)]);
     }
+    tabelaFinanceira.push(["Resultado líquido mensal (economia − mensalidade)", brl2(cenarios.resultadoLiquidoMensalAno1)]);
+    tabelaFinanceira.push([`Resultado líquido total (${cenarios.linhas.length} anos)`, brl(cenarios.resultadoLiquidoTotalHorizonte)]);
   }
 
   await gerarPropostaPdf({
@@ -588,7 +593,7 @@ async function exportarPdfBess() {
     responsavelNome: $("b-responsavel-nome").value,
     responsavelCargo: $("b-responsavel-cargo").value,
     email: $("b-email").value,
-    resumoExecutivo: `Esta proposta apresenta a solução de armazenamento de energia (BESS) para otimização do consumo elétrico nas instalações de ${cliente}. Nosso objetivo é reduzir os custos operacionais com energia e demanda contratada, com economia mensal estimada de ${brl2(cenarios.economiaMensalAno1)}.`,
+    resumoExecutivo: `Esta proposta apresenta a solução de armazenamento de energia (BESS) para otimização do consumo elétrico nas instalações de ${cliente}. Nosso objetivo é reduzir os custos operacionais com energia e demanda contratada, com economia de energia estimada de ${brl2(cenarios.economiaEnergiaMensalAno1)}/mês.`,
     diagnostico,
     escopo,
     tabelaFinanceira,

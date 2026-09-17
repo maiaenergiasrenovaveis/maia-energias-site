@@ -147,8 +147,9 @@ class Builder {
 
 function desenharCabecalho(doc, logo, { subtitulo, codigoProposta, dataProposta }) {
   if (logo) {
-    // Cabeçalho tem ~27mm de altura útil (até a linha divisória em y=33) — a logo
-    // precisa caber inteira aí, sem ser cortada pela linha ou pelo conteúdo abaixo.
+    // A arte do logo.png tem bastante espaço em branco acima/abaixo e o texto
+    // "ENERGIAS RENOVÁVEIS" é uma legenda pequena por baixo de "MAIA" — precisa de
+    // um tamanho generoso pra essa legenda ficar legível, não só pra não cortar.
     const w = 22;
     const h = w * logo.ratio;
     doc.addImage(logo.dataUrl, "PNG", MARGIN_L, 6, w, h);
