@@ -870,7 +870,10 @@ async function handleAneelTarifas(request) {
       vigenciaFim: atuais[0].DatFimVigencia,
       fonte: `ANEEL — ${distribuidora} (${subgrupo}/${modalidade})`,
     }),
-    { headers: { "content-type": "application/json", "cache-control": "public, max-age=86400" } }
+    // max-age curto: essa resposta ainda está mudando de formato enquanto o simulador evolui,
+    // e o front-end já busca com cache:"no-store" — este header é só pra quem chamar o endpoint
+    // sem esse cuidado (ex: curl), pra não herdar uma resposta com formato antigo por muito tempo.
+    { headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" } }
   );
 }
 
@@ -964,7 +967,7 @@ async function handleFetch(request, env, ctx) {
           return jsonResponse({ error: String(err) }, 500);
         }
       },
-      "2"
+      "3"
     );
   }
 

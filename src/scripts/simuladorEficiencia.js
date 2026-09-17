@@ -76,7 +76,12 @@ async function buscarTarifaAneel({ distribuidoraId, subgrupoId, modalidadeId, st
 
   status.textContent = "Buscando na ANEEL...";
   try {
-    const res = await fetch(`/interno/api/aneel-tarifas?distribuidora=${encodeURIComponent(distribuidora)}&subgrupo=${encodeURIComponent(subgrupo)}&modalidade=${encodeURIComponent(modalidade)}`);
+    // cache: "no-store" — essa chamada muda de formato conforme o simulador evolui; sem isso,
+    // o navegador de quem já buscou essa combinação antes guardaria a resposta antiga por até
+    // 1h (o Cache-Control do endpoint) e nunca veria os campos novos até o cache expirar.
+    const res = await fetch(`/interno/api/aneel-tarifas?distribuidora=${encodeURIComponent(distribuidora)}&subgrupo=${encodeURIComponent(subgrupo)}&modalidade=${encodeURIComponent(modalidade)}`, {
+      cache: "no-store",
+    });
     const data = await res.json();
     if (!res.ok) {
       status.textContent = `Não encontrado — confira o nome da distribuidora (${data.error ?? "erro"}).`;
