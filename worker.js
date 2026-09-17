@@ -695,6 +695,20 @@ const CSP_PORTAL = [
   "frame-ancestors 'none'",
 ].join("; ");
 
+// /interno/* (simulador de eficiência) precisa de scripts de CDN (Chart.js, jsPDF)
+// que a CSP estrita do site público bloquearia.
+const CSP_INTERNO = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 const SECURITY_HEADERS_BASE = {
   "X-Frame-Options": "DENY",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
@@ -703,17 +717,53 @@ const SECURITY_HEADERS_BASE = {
   "Cross-Origin-Resource-Policy": "same-origin",
 };
 
-function withSecurityHeaders(response, hostname) {
+function withSecurityHeaders(response, hostname, pathname) {
   const headers = new Headers(response.headers);
   for (const [key, value] of Object.entries(SECURITY_HEADERS_BASE)) {
     headers.set(key, value);
   }
-  headers.set("Content-Security-Policy", hostname === "portal.maiaenergiasrenovaveis.com.br" ? CSP_PORTAL : CSP_SITE);
+  const csp = hostname === "portal.maiaenergiasrenovaveis.com.br" ? CSP_PORTAL : pathname.startsWith("/interno") ? CSP_INTERNO : CSP_SITE;
+  headers.set("Content-Security-Policy", csp);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+// Autenticação HTTP Basic para /interno/* (ferramentas internas — simulador de
+// eficiência). Ao contrário do gate client-side do /portal (só sessionStorage,
+// não é segurança de verdade), isso é validado na borda pelo Worker: sem as
+// credenciais certas, o conteúdo nem chega a ser servido. Falha fechado — se os
+// secrets INTERNO_USER/INTERNO_PASSWORD não estiverem configurados, bloqueia tudo.
+function checkBasicAuth(request, env) {
+  const expectedUser = env.INTERNO_USER;
+  const expectedPassword = env.INTERNO_PASSWORD;
+  if (!expectedUser || !expectedPassword) return false;
+  const auth = request.headers.get("Authorization") || "";
+  if (!auth.startsWith("Basic ")) return false;
+  let decoded;
+  try {
+    decoded = atob(auth.slice(6));
+  } catch {
+    return false;
+  }
+  const sep = decoded.indexOf(":");
+  if (sep === -1) return false;
+  const user = decoded.slice(0, sep);
+  const password = decoded.slice(sep + 1);
+  return user === expectedUser && password === expectedPassword;
+}
+
+function requireBasicAuth() {
+  return new Response("Autenticação necessária.", {
+    status: 401,
+    headers: { "WWW-Authenticate": 'Basic realm="Maia Interno", charset="UTF-8"' },
+  });
 }
 
 async function handleFetch(request, env, ctx) {
   const url = new URL(request.url);
+
+  if (url.pathname === "/interno" || url.pathname.startsWith("/interno/")) {
+    if (!checkBasicAuth(request, env)) return requireBasicAuth();
+  }
 
   if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/eletropostos-sp") {
     try {
@@ -754,7 +804,8 @@ async function handleFetch(request, env, ctx) {
 export default {
   async fetch(request, env, ctx) {
     const response = await handleFetch(request, env, ctx);
-    return withSecurityHeaders(response, new URL(request.url).hostname);
+    const url = new URL(request.url);
+    return withSecurityHeaders(response, url.hostname, url.pathname);
   },
 
   async scheduled(event, env, ctx) {

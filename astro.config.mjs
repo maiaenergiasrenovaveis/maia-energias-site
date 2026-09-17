@@ -15,7 +15,7 @@ export default defineConfig({
 
   integrations: [
     sitemap({
-      filter: (page) => !page.includes('/portal'),
+      filter: (page) => !page.includes('/portal') && !page.includes('/interno'),
     }),
   ]
 });
