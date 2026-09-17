@@ -54,7 +54,7 @@ const ICMS_REFERENCIA_POR_UF = {
 
 const ultimasTarifasBrutasAneel = new Map(); // statusId -> {tarifaPonta, tarifaForaPonta, tarifaDemanda} sem imposto
 
-function aplicarImpostoTarifaAneel({ statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId }) {
+function aplicarImpostoTarifaAneel({ statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId, tarifaTusdId }) {
   const bruta = ultimasTarifasBrutasAneel.get(statusId);
   if (!bruta) return;
   const icmsPercent = Number($(icmsId).value) / 100 || 0;
@@ -64,9 +64,10 @@ function aplicarImpostoTarifaAneel({ statusId, ufId, icmsId, pisCofinsId, tarifa
   $(tarifaPontaId).value = (bruta.tarifaPonta / fatorGrossUp).toFixed(4);
   $(tarifaForaPontaId).value = (bruta.tarifaForaPonta / fatorGrossUp).toFixed(4);
   if (bruta.tarifaDemanda != null) $(tarifaDemandaId).value = (bruta.tarifaDemanda / fatorGrossUp).toFixed(2);
+  if (tarifaTusdId && $(tarifaTusdId) && bruta.tarifaTusd != null) $(tarifaTusdId).value = (bruta.tarifaTusd / fatorGrossUp).toFixed(4);
 }
 
-async function buscarTarifaAneel({ distribuidoraId, subgrupoId, modalidadeId, statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId, onDone }) {
+async function buscarTarifaAneel({ distribuidoraId, subgrupoId, modalidadeId, statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId, tarifaTusdId, onDone }) {
   const distribuidora = $(distribuidoraId).value.trim();
   const subgrupo = $(subgrupoId).value;
   const modalidade = $(modalidadeId).value;
@@ -81,8 +82,8 @@ async function buscarTarifaAneel({ distribuidoraId, subgrupoId, modalidadeId, st
       status.textContent = `Não encontrado — confira o nome da distribuidora (${data.error ?? "erro"}).`;
       return;
     }
-    ultimasTarifasBrutasAneel.set(statusId, { tarifaPonta: data.tarifaPonta, tarifaForaPonta: data.tarifaForaPonta, tarifaDemanda: data.tarifaDemanda });
-    aplicarImpostoTarifaAneel({ statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId });
+    ultimasTarifasBrutasAneel.set(statusId, { tarifaPonta: data.tarifaPonta, tarifaForaPonta: data.tarifaForaPonta, tarifaDemanda: data.tarifaDemanda, tarifaTusd: data.tarifaTusd });
+    aplicarImpostoTarifaAneel({ statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId, tarifaTusdId });
     const vigInicio = new Date(data.vigenciaInicio + "T00:00:00").toLocaleDateString("pt-BR");
     const vigFim = new Date(data.vigenciaFim + "T00:00:00").toLocaleDateString("pt-BR");
     status.innerHTML = `<span class="text-emerald-600 font-semibold">✓</span> ${data.fonte} — vigência ${vigInicio} a ${vigFim} (valores sem imposto; ICMS/PIS-COFINS aplicados acima).`;
@@ -678,6 +679,7 @@ function initBess() {
       tarifaPontaId: "b-tarifa-ponta",
       tarifaForaPontaId: "b-tarifa-fora-ponta",
       tarifaDemandaId: "b-tarifa-demanda",
+      tarifaTusdId: "b-tarifa-tusd",
       onDone: computeBess,
     });
   ["b-aneel-distribuidora", "b-aneel-subgrupo", "b-aneel-modalidade"].forEach((id) => {
@@ -695,6 +697,7 @@ function initBess() {
       tarifaPontaId: "b-tarifa-ponta",
       tarifaForaPontaId: "b-tarifa-fora-ponta",
       tarifaDemandaId: "b-tarifa-demanda",
+      tarifaTusdId: "b-tarifa-tusd",
     });
     computeBess();
   });
@@ -709,6 +712,7 @@ function initBess() {
         tarifaPontaId: "b-tarifa-ponta",
         tarifaForaPontaId: "b-tarifa-fora-ponta",
         tarifaDemandaId: "b-tarifa-demanda",
+        tarifaTusdId: "b-tarifa-tusd",
       });
       computeBess();
     });

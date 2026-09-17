@@ -613,9 +613,11 @@ async function buildStationDetail(env, stationId) {
 // além do agregado diário: mesmo com a query rápida, sem isso cada visita recalcula o
 // payload do zero. Chave = URL completa (inclui window=/id=, então cada variação tem
 // sua própria entrada). Só cacheia resposta 200.
-async function withEdgeCache(request, ctx, buildResponse) {
+async function withEdgeCache(request, ctx, buildResponse, cacheVersion = "") {
   const cache = caches.default;
-  const cacheKey = new Request(new URL(request.url).toString(), { method: "GET" });
+  const keyUrl = new URL(request.url);
+  if (cacheVersion) keyUrl.searchParams.set("__v", cacheVersion);
+  const cacheKey = new Request(keyUrl.toString(), { method: "GET" });
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
   const response = await buildResponse();
@@ -854,12 +856,16 @@ async function handleAneelTarifas(request) {
   const tarifaForaPonta = (parseNumeroBr(linhaForaPonta.VlrTE) + parseNumeroBr(linhaForaPonta.VlrTUSD)) / 1000;
   const tarifaPonta = linhaPonta ? (parseNumeroBr(linhaPonta.VlrTE) + parseNumeroBr(linhaPonta.VlrTUSD)) / 1000 : tarifaForaPonta;
   const tarifaDemanda = linhaDemanda ? parseNumeroBr(linhaDemanda.VlrTUSD) : null;
+  // Só o componente TUSD (sem TE) da fora ponta — é o que continua devido à distribuidora
+  // quando o cliente migra pro Mercado Livre (só a energia/TE é negociada livremente lá).
+  const tarifaTusd = parseNumeroBr(linhaForaPonta.VlrTUSD) / 1000;
 
   return new Response(
     JSON.stringify({
       tarifaPonta,
       tarifaForaPonta,
       tarifaDemanda,
+      tarifaTusd,
       vigenciaInicio: vigenciaMaisRecente,
       vigenciaFim: atuais[0].DatFimVigencia,
       fonte: `ANEEL — ${distribuidora} (${subgrupo}/${modalidade})`,
@@ -946,13 +952,20 @@ async function handleFetch(request, env, ctx) {
   }
 
   if (url.pathname === "/interno/api/aneel-tarifas") {
-    return withEdgeCache(request, ctx, async () => {
-      try {
-        return await handleAneelTarifas(request);
-      } catch (err) {
-        return jsonResponse({ error: String(err) }, 500);
-      }
-    });
+    // cacheVersion "2": bump sempre que o formato da resposta mudar (ex: campo novo como
+    // tarifaTusd), pra não continuar servindo do cache de borda uma resposta com o formato antigo.
+    return withEdgeCache(
+      request,
+      ctx,
+      async () => {
+        try {
+          return await handleAneelTarifas(request);
+        } catch (err) {
+          return jsonResponse({ error: String(err) }, 500);
+        }
+      },
+      "2"
+    );
   }
 
   if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/eletropostos-sp") {
