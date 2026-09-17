@@ -1103,6 +1103,15 @@ function initCarregador() {
     el.addEventListener("input", computeCarregador);
   });
 
+  // Enterrado usa solo a 20°C como referência; os demais métodos usam ar a 30°C — atualiza o
+  // padrão do campo de temperatura ao trocar de método, a menos que o usuário já tenha digitado
+  // um valor próprio (mesmo padrão usado no campo de ICMS por UF).
+  $("c-temperatura").addEventListener("input", () => ($("c-temperatura").dataset.touched = "1"));
+  $("c-metodo").addEventListener("change", () => {
+    if (!$("c-temperatura").dataset.touched) $("c-temperatura").value = $("c-metodo").value === "D" ? 20 : 30;
+    computeCarregador();
+  });
+
   $("c-salvar").addEventListener("click", () => salvarSimulacao("carregador", "painel-carregador", "c-cliente", "c-salvar-status"));
 
   computeCarregador();
@@ -1144,7 +1153,7 @@ function computeCarregador() {
     ${linhaHtml("Corrente de projeto (carga contínua, ×1,25)", `${num(r.correnteProjeto, 1)} A`)}
     ${linhaHtml("Fator de correção (temp. × agrupamento)", num(r.fatorTemp * r.fatorAgrup, 2))}
     ${linhaHtml("Seção do cabo — fase", `${r.secaoFaseMm2} mm²`)}
-    ${r.secaoNeutroMm2 != null ? linhaHtml("Seção do cabo — neutro", `${r.secaoNeutroMm2} mm²`) : linhaHtml("Neutro", "não aplicável (trifásico sem neutro)")}
+    ${linhaHtml("Seção do cabo — neutro", `${r.secaoNeutroMm2} mm²`)}
     ${linhaHtml("Seção do cabo — terra (PE)", `${r.secaoTerraMm2} mm²`)}
     ${linhaHtml("Capacidade de condução corrigida (Iz)", `${num(r.capacidadeCaboA, 1)} A`)}
     ${linhaHtml("Eletroduto recomendado", r.eletroduto)}

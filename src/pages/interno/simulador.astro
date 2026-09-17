@@ -616,9 +616,11 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
               <select id="c-metodo" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
                 <option value="B1" selected>B1 — eletroduto embutido em alvenaria</option>
                 <option value="C">C — eletroduto/cabo aparente ou bandeja</option>
+                <option value="D">D — enterrado no solo</option>
+                <option value="F">F — aéreo / ao ar livre (sem eletroduto)</option>
               </select>
             </div>
-            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Temperatura ambiente (°C)</label><input id="c-temperatura" type="number" step="1" value="30" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Temperatura ambiente/solo (°C)</label><input id="c-temperatura" type="number" step="1" value="30" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div class="col-span-2"><label class="block text-[11px] font-semibold text-slate-500 mb-1">Circuitos agrupados no mesmo eletroduto/bandeja</label><input id="c-agrupamento" type="number" step="1" min="1" value="1" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
           </div>
         </div>

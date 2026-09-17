@@ -11,7 +11,8 @@
 // carregador no mesmo eletroduto/QDC, ou se o esquema de aterramento (TN-S/TN-C-S/TT) da unidade
 // não for o padrão assumido aqui.
 
-// Tabela 36 — ampacidade (A) por seção (mm²), cobre, PVC 70°C, 30°C ambiente, sem agrupamento.
+// Tabela 36 — ampacidade (A) por seção (mm²), cobre, PVC 70°C, sem agrupamento.
+// B1/C/F usam ambiente a 30°C como referência; D (enterrado) usa solo a 20°C — ver FATOR_TEMPERATURA_*.
 const AMPACIDADE = {
   B1: {
     2: { 1.5: 17.5, 2.5: 24, 4: 32, 6: 41, 10: 57, 16: 76, 25: 101, 35: 125, 50: 151, 70: 192, 95: 232, 120: 269, 150: 300, 185: 341, 240: 400, 300: 458 },
@@ -21,22 +22,40 @@ const AMPACIDADE = {
     2: { 1.5: 19.5, 2.5: 27, 4: 36, 6: 46, 10: 63, 16: 85, 25: 112, 35: 138, 50: 168, 70: 213, 95: 258, 120: 299, 150: 344, 185: 392, 240: 461, 300: 530 },
     3: { 1.5: 17.5, 2.5: 24, 4: 32, 6: 41, 10: 57, 16: 76, 25: 96, 35: 119, 50: 144, 70: 184, 95: 223, 120: 259, 150: 299, 185: 341, 240: 403, 300: 464 },
   },
+  // Método D1 — cabo multipolar diretamente enterrado no solo (resistividade térmica de
+  // referência 2,5 K.m/W, profundidade padrão — não ajustável nesta calculadora).
+  D: {
+    2: { 1.5: 26, 2.5: 34, 4: 44, 6: 56, 10: 73, 16: 93, 25: 117, 35: 138, 50: 162, 70: 197, 95: 227, 120: 251, 150: 272, 185: 296, 240: 327, 300: 356 },
+    3: { 1.5: 22, 2.5: 29, 4: 37, 6: 48, 10: 62, 16: 79, 25: 99, 35: 117, 50: 138, 70: 167, 95: 193, 120: 213, 150: 231, 185: 252, 240: 278, 300: 303 },
+  },
+  // Método F — cabo isolado ao ar livre, espaçado (afastado de parede/superfícies, sobre
+  // suportes/isoladores) — típico de trecho aéreo entre QDC e um posto de recarga externo.
+  F: {
+    2: { 1.5: 22, 2.5: 30, 4: 40, 6: 51, 10: 70, 16: 94, 25: 119, 35: 148, 50: 180, 70: 232, 95: 282, 120: 328, 150: 379, 185: 434, 240: 514, 300: 593 },
+    3: { 1.5: 19, 2.5: 26, 4: 35, 6: 44, 10: 61, 16: 82, 25: 104, 35: 129, 50: 157, 70: 202, 95: 245, 120: 285, 150: 330, 185: 378, 240: 447, 300: 516 },
+  },
 };
 
 export const METODOS_INSTALACAO = {
   B1: "Eletroduto embutido em alvenaria/parede",
   C: "Eletroduto ou cabo aparente / bandeja não perfurada",
+  D: "Enterrado no solo (direto ou em eletroduto enterrado)",
+  F: "Aéreo / ao ar livre (cabo isolado, espaçado, sem eletroduto)",
 };
+
+const METODOS_ENTERRADOS = new Set(["D"]);
 
 const SECOES_PADRAO = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240, 300];
 const DISJUNTORES_PADRAO = [10, 16, 20, 25, 32, 40, 50, 63, 70, 80, 100, 125, 150, 175, 200, 225, 250];
 const DR_PADRAO = [25, 40, 63, 80, 100, 125];
 
-// Tabela 40 — fator de correção de temperatura (isolação PVC, referência 30°C = 1,00).
-const FATOR_TEMPERATURA = { 10: 1.22, 15: 1.17, 20: 1.12, 25: 1.06, 30: 1.0, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71, 55: 0.61, 60: 0.5 };
+// Tabela 40 — fator de correção de temperatura, isolação PVC.
+const FATOR_TEMPERATURA_AR = { 10: 1.22, 15: 1.17, 20: 1.12, 25: 1.06, 30: 1.0, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71, 55: 0.61, 60: 0.5 }; // referência: ar a 30°C
+const FATOR_TEMPERATURA_SOLO = { 10: 1.1, 15: 1.05, 20: 1.0, 25: 0.95, 30: 0.89, 35: 0.84, 40: 0.77, 45: 0.71, 50: 0.63 }; // referência: solo a 20°C
 
-// Tabela 42 — fator de agrupamento (circuitos em camada única, em contato).
-const FATOR_AGRUPAMENTO = { 1: 1.0, 2: 0.8, 3: 0.7, 4: 0.65, 5: 0.6, 6: 0.57, 7: 0.54, 8: 0.52, 9: 0.5 };
+// Tabela 42/43 — fator de agrupamento (circuitos em camada única, em contato/mesma vala).
+const FATOR_AGRUPAMENTO_AR = { 1: 1.0, 2: 0.8, 3: 0.7, 4: 0.65, 5: 0.6, 6: 0.57, 7: 0.54, 8: 0.52, 9: 0.5 };
+const FATOR_AGRUPAMENTO_SOLO = { 1: 1.0, 2: 0.75, 3: 0.65, 4: 0.6, 5: 0.55, 6: 0.5, 7: 0.45, 8: 0.43, 9: 0.41 };
 
 const RESISTIVIDADE_COBRE = 0.0225; // Ω·mm²/m, cobre ~70°C (aprox. — referência para estimativa de queda de tensão)
 const FATOR_CONTINUIDADE = 1.25; // carga contínua (carregamento > 1h) — mesmo princípio do NBR IEC 61851/boas práticas de dimensionamento para EVSE
@@ -86,7 +105,8 @@ function quedaTensaoPercent({ correnteA, distanciaM, secaoMm2, tensaoV, tipoLiga
   return (quedaV / tensaoV) * 100;
 }
 
-function secaoParaEletroduto(secaoMm2) {
+function secaoParaEletroduto(secaoMm2, metodoInstalacao) {
+  if (metodoInstalacao === "F") return "não aplicável (cabo isolado ao ar livre, sem eletroduto)";
   const linha = ELETRODUTO_POR_SECAO.find((l) => secaoMm2 <= l.max);
   return linha ? linha.label : "consultar projetista (seção acima da tabela de referência)";
 }
@@ -106,15 +126,17 @@ function secaoTerra(secaoFaseMm2) {
  * @param {number} p.fatorPotencia - cosφ do carregador (0-1)
  * @param {number} p.distanciaM - distância do QDC até o carregador (m, ida)
  * @param {number} p.quedaMaxPercent - queda de tensão máxima admissível (%), NBR5410 recomenda ~4% para circuitos terminais
- * @param {"B1"|"C"} p.metodoInstalacao
- * @param {number} p.temperaturaAmbiente - °C
- * @param {number} p.circuitosAgrupados - nº de circuitos no mesmo eletroduto/bandeja (mín. 1)
+ * @param {"B1"|"C"|"D"|"F"} p.metodoInstalacao
+ * @param {number} p.temperaturaAmbiente - °C (ambiente do ar para B1/C/F, do solo para D)
+ * @param {number} p.circuitosAgrupados - nº de circuitos no mesmo eletroduto/bandeja/vala (mín. 1)
  */
 export function calcularDimensionamentoEletrico(p) {
   const avisos = [];
   const tipoLigacao = p.tipoLigacao || "monofasico";
   const condutoresCarregados = tipoLigacao === "trifasico" ? 3 : 2;
-  const tabela = AMPACIDADE[p.metodoInstalacao || "B1"][condutoresCarregados];
+  const metodo = p.metodoInstalacao || "B1";
+  const tabela = AMPACIDADE[metodo][condutoresCarregados];
+  const enterrado = METODOS_ENTERRADOS.has(metodo);
 
   const correnteNominal = calcularCorrenteCarregador({
     potenciaKw: p.potenciaKw,
@@ -124,9 +146,12 @@ export function calcularDimensionamentoEletrico(p) {
   });
   const correnteProjeto = correnteNominal * FATOR_CONTINUIDADE;
 
-  const fatorTemp = interpolar(FATOR_TEMPERATURA, p.temperaturaAmbiente ?? 30);
+  const temperaturaRef = enterrado ? 20 : 30;
+  const tabelaTemp = enterrado ? FATOR_TEMPERATURA_SOLO : FATOR_TEMPERATURA_AR;
+  const tabelaAgrup = enterrado ? FATOR_AGRUPAMENTO_SOLO : FATOR_AGRUPAMENTO_AR;
+  const fatorTemp = interpolar(tabelaTemp, p.temperaturaAmbiente ?? temperaturaRef);
   const agrupados = Math.max(1, Math.round(p.circuitosAgrupados ?? 1));
-  const fatorAgrup = agrupados >= 9 ? FATOR_AGRUPAMENTO[9] : FATOR_AGRUPAMENTO[agrupados] ?? 1;
+  const fatorAgrup = agrupados >= 9 ? tabelaAgrup[9] : tabelaAgrup[agrupados] ?? 1;
   const fatorCorrecao = fatorTemp * fatorAgrup;
 
   const quedaMax = p.quedaMaxPercent ?? 4;
@@ -191,10 +216,13 @@ export function calcularDimensionamentoEletrico(p) {
     quedaTensaoPercent: quedaTensao,
     quedaMaxPercent: quedaMax,
     secaoFaseMm2: secaoEscolhida,
-    secaoNeutroMm2: tipoLigacao === "trifasico" ? null : secaoEscolhida,
+    // Carregador trifásico normalmente tem neutro (3F+N) — eletrônica interna e circuitos de
+    // controle do carregador costumam precisar de fase-neutro, então o neutro é dimensionado
+    // igual à fase por padrão (também evita subdimensionar diante de harmônicas de 3ª ordem).
+    secaoNeutroMm2: secaoEscolhida,
     secaoTerraMm2: secaoTerra(secaoEscolhida),
     capacidadeCaboA: capacidadeCabo,
-    eletroduto: secaoParaEletroduto(secaoEscolhida),
+    eletroduto: secaoParaEletroduto(secaoEscolhida, metodo),
     disjuntorA: disjuntor,
     disjuntorCurva: "C",
     dps: { classe: "II", ucV: dpsUc, inKa: 5, imaxKa: dpsImaxKa },
