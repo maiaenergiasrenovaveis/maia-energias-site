@@ -147,9 +147,11 @@ class Builder {
 
 function desenharCabecalho(doc, logo, { subtitulo, codigoProposta, dataProposta }) {
   if (logo) {
-    const w = 32;
+    // Cabeçalho tem ~27mm de altura útil (até a linha divisória em y=33) — a logo
+    // precisa caber inteira aí, sem ser cortada pela linha ou pelo conteúdo abaixo.
+    const w = 22;
     const h = w * logo.ratio;
-    doc.addImage(logo.dataUrl, "PNG", MARGIN_L, 12, w, h);
+    doc.addImage(logo.dataUrl, "PNG", MARGIN_L, 6, w, h);
   }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
