@@ -877,6 +877,65 @@ async function handleAneelTarifas(request) {
   );
 }
 
+// Escaneia uma foto/print da conta de energia via GPT-4o-mini (visão) para extrair o
+// histórico de consumo mensal e alguns dados do cliente, evitando digitação manual.
+// Chave da OpenAI fica só no Worker (secret OPENAI_API_KEY) — nunca é exposta ao navegador.
+// Sem cache: cada conta é um documento pessoal do cliente, não um dado de referência público
+// como os de irradiação/ANEEL acima — nunca deve ficar guardada na borda da Cloudflare.
+const PROMPT_SCAN_CONTA = `Você extrai dados estruturados de contas de energia elétrica brasileiras (Enel, CPFL, Light, Cemig, Copel, Celesc etc). Analise a imagem e retorne APENAS um JSON (sem markdown, sem texto extra) no formato:
+{
+  "cliente": string ou null (nome do titular/unidade consumidora),
+  "cidade": string ou null (cidade do endereço de fornecimento, sem UF),
+  "uf": string ou null (sigla de 2 letras),
+  "distribuidora": string ou null,
+  "tipo_rede": "Monofásica" | "Bifásica" | "Trifásica" | null (pela tensão/ligação informada na conta, se houver),
+  "historico_consumo": array de objetos { "mes": "JAN"|"FEV"|"MAR"|"ABR"|"MAI"|"JUN"|"JUL"|"AGO"|"SET"|"OUT"|"NOV"|"DEZ", "kwh": number }, um por mês do gráfico/tabela "Histórico de consumo" (geralmente os últimos 12 meses)
+}
+Se um campo não estiver visível ou você não tiver certeza, use null (para historico_consumo, use um array vazio). Não invente valores.`;
+
+async function handleScanConta(request, env) {
+  if (!env.OPENAI_API_KEY) return jsonResponse({ error: "Leitura automática não configurada (falta OPENAI_API_KEY)." }, 500);
+
+  const body = await request.json().catch(() => null);
+  if (!body?.imageBase64 || !body?.mimeType) return jsonResponse({ error: "envie imageBase64 e mimeType" }, 400);
+  if (!/^image\/(png|jpe?g|webp)$/.test(body.mimeType)) return jsonResponse({ error: "formato de imagem não suportado — envie PNG, JPG ou WEBP" }, 400);
+  // ~5.5MB em base64 ≈ 4MB de imagem original — suficiente pra uma foto/print de conta em boa resolução.
+  if (body.imageBase64.length > 5.5 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~4MB)" }, 400);
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENAI_API_KEY}` },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: PROMPT_SCAN_CONTA },
+            { type: "image_url", image_url: { url: `data:${body.mimeType};base64,${body.imageBase64}` } },
+          ],
+        },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    return jsonResponse({ error: `falha ao consultar a OpenAI (${res.status}): ${errBody.slice(0, 300)}` }, 502);
+  }
+  const data = await res.json();
+  const conteudo = data?.choices?.[0]?.message?.content;
+  if (!conteudo) return jsonResponse({ error: "resposta vazia da OpenAI" }, 502);
+
+  let extraido;
+  try {
+    extraido = JSON.parse(conteudo);
+  } catch {
+    return jsonResponse({ error: "não consegui interpretar a resposta da OpenAI" }, 502);
+  }
+  return jsonResponse(extraido);
+}
+
 // API de simulações salvas (/interno/api/simulacoes) — banco D1 dedicado
 // (maia-simulador-db), separado do banco do portal de eletropostos para não
 // misturar dados dos dois projetos. Já protegida pelo Basic Auth de /interno/*.
@@ -929,6 +988,14 @@ async function handleFetch(request, env, ctx) {
   if (url.pathname === "/interno/api/simulacoes" || /^\/interno\/api\/simulacoes\/\d+$/.test(url.pathname)) {
     try {
       return await handleSimulacoesApi(request, env);
+    } catch (err) {
+      return jsonResponse({ error: String(err) }, 500);
+    }
+  }
+
+  if (url.pathname === "/interno/api/scan-conta" && request.method === "POST") {
+    try {
+      return await handleScanConta(request, env);
     } catch (err) {
       return jsonResponse({ error: String(err) }, 500);
     }

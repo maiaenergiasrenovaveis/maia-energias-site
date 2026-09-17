@@ -372,8 +372,77 @@ function initSolar() {
 
   $("s-export-pdf").addEventListener("click", exportarPdfSolar);
   $("s-salvar").addEventListener("click", () => salvarSimulacao("solar", "painel-solar", "s-cliente", "s-salvar-status"));
+  $("s-scan-conta-btn").addEventListener("click", escanearContaEnergia);
 
   computeSolar();
+}
+
+function arquivoParaBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function escanearContaEnergia() {
+  const arquivo = $("s-scan-conta-arquivo").files?.[0];
+  const status = $("s-scan-conta-status");
+  if (!arquivo) {
+    status.textContent = "Selecione uma imagem da conta primeiro.";
+    return;
+  }
+  status.textContent = "Lendo a conta (pode levar alguns segundos)...";
+  try {
+    const imageBase64 = await arquivoParaBase64(arquivo);
+    const res = await fetch("/interno/api/scan-conta", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ imageBase64, mimeType: arquivo.type }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      status.textContent = `Não foi possível ler a conta — ${data.error ?? "erro desconhecido"}.`;
+      return;
+    }
+
+    const preenchidos = [];
+    if (data.cliente && !$("s-cliente").value) {
+      $("s-cliente").value = data.cliente;
+      preenchidos.push("cliente");
+    }
+    if (data.cidade && !$("s-cidade").value) {
+      $("s-cidade").value = data.uf ? `${data.cidade} - ${data.uf}` : data.cidade;
+      $("s-cidade").dispatchEvent(new Event("input", { bubbles: true }));
+      preenchidos.push("cidade");
+    }
+    if (data.tipo_rede && ["Monofásica", "Bifásica", "Trifásica"].includes(data.tipo_rede)) {
+      $("s-rede").value = data.tipo_rede;
+      preenchidos.push("tipo de rede");
+    }
+
+    const historico = Array.isArray(data.historico_consumo) ? data.historico_consumo.filter((h) => MESES.includes(h?.mes) && Number.isFinite(h?.kwh)) : [];
+    if (historico.length) {
+      const mesInicialIdx = MESES.indexOf(historico[0].mes);
+      $("s-mes-inicial").value = String(mesInicialIdx);
+      atualizarLabelsMeses();
+      historico.slice(0, 12).forEach((h, i) => {
+        const el = $(`s-consumo-${i}`);
+        if (el) el.value = h.kwh;
+      });
+      preenchidos.push(`${historico.length} meses de consumo`);
+    }
+
+    if (!preenchidos.length) {
+      status.textContent = "Não consegui identificar dados nessa imagem — confira se é uma foto legível da conta, ou preencha manualmente.";
+      return;
+    }
+    status.innerHTML = `<span class="text-emerald-600 font-semibold">✓</span> Preenchido automaticamente: ${preenchidos.join(", ")}. <strong>Confira os valores antes de calcular.</strong>`;
+    computeSolar();
+  } catch {
+    status.textContent = "Erro ao processar a imagem — tente novamente ou preencha manualmente.";
+  }
 }
 
 function lerConsumoMensal() {
