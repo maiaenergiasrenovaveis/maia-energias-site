@@ -130,11 +130,22 @@ export function calcularCapex(c) {
  */
 export function calcularContaMes1(dim, tarifas, ano) {
   const kwh = dim.consumoMedioMensal;
-  // Duas bases distintas de "kWh injetado" (replicadas literalmente da planilha):
+  // A planilha original assume implicitamente que o sistema gera o suficiente pra
+  // cobrir todo o consumo (comum quando dimensionado pela própria demanda) — mas
+  // quando a potência é menor que o ideal (ex: limitada pela área do local), só a
+  // fração realmente coberta pela geração entra na compensação da Lei 14.300; o
+  // restante é cobrado à tarifa cheia, sem nenhum benefício. Prorateando por essa
+  // cobertura (em vez de recalcular as bases do zero) mantém as duas fórmulas
+  // originais intactas quando o sistema já é adequado (cobertura = 100%).
+  const coberturaGeracao = dim.consumoSemTaxa > 0 ? Math.min(1, dim.geracaoMedia / dim.consumoSemTaxa) : 0;
+  const consumoNaoCompensado = dim.consumoSemTaxa * (1 - coberturaGeracao);
+
+  // Duas bases distintas de "kWh injetado" (replicadas literalmente da planilha),
+  // agora prorateadas pela cobertura real de geração:
   // (1) para o crédito de TUSD/ICMS: consumo - taxa de disponibilidade (kWh)
   // (2) para a cobrança de Fio B: consumo × (1 - % simultaneidade)
-  const kwhCreditoTusd = kwh - dim.taxaDisp;
-  const kwhInjetadoFioB = kwh * (1 - tarifas.simultaneidadePercent);
+  const kwhCreditoTusd = dim.consumoSemTaxa * coberturaGeracao;
+  const kwhInjetadoFioB = kwh * (1 - tarifas.simultaneidadePercent) * coberturaGeracao;
   const kwhSimultaneo = kwh * tarifas.simultaneidadePercent;
 
   const icmsSobreTusdPorKwh = tarifas.tusdSemImposto * tarifas.icmsPercent;
@@ -146,12 +157,14 @@ export function calcularContaMes1(dim, tarifas, ano) {
   const semSolarTusd = kwh * tarifas.tusdComImposto;
   const contaSemSolar = semSolarTe + semSolarTusd + tarifas.iluminacaoPublica;
 
-  // Conta com solar (F35): ICMS s/TUSD do crédito + tarifa mínima + iluminação pública + fio B sobre o injetado
+  // Conta com solar (F35): ICMS s/TUSD do crédito + tarifa mínima + iluminação pública + fio B
+  // sobre o injetado + o que não foi compensado (sistema menor que o consumo), à tarifa cheia.
   const creditoTusd = kwhCreditoTusd * tarifas.tusdComImposto;
   const icmsSobreTusdCredito = creditoTusd * icmsSobreTusdPorKwh;
   const tarifaMinima = dim.taxaDisp * (tarifas.teComImposto + tarifas.tusdComImposto);
   const fioB = kwhInjetadoFioB * fioBBaseGrossedUp;
-  const contaComSolar = icmsSobreTusdCredito + tarifaMinima + tarifas.iluminacaoPublica + fioB;
+  const custoNaoCompensado = consumoNaoCompensado * (tarifas.teComImposto + tarifas.tusdComImposto);
+  const contaComSolar = icmsSobreTusdCredito + tarifaMinima + tarifas.iluminacaoPublica + fioB + custoNaoCompensado;
 
   const descontoReais = contaSemSolar - contaComSolar;
   const descontoPercent = descontoReais / contaSemSolar;
@@ -161,6 +174,7 @@ export function calcularContaMes1(dim, tarifas, ano) {
     kwhCreditoTusd,
     kwhInjetadoFioB,
     kwhSimultaneo,
+    consumoNaoCompensado,
     contaSemSolar,
     contaComSolar,
     descontoReais,
@@ -179,7 +193,11 @@ export function calcularPayback(dim, tarifas, capex, anoInicial, financeiro) {
   const tma = financeiro.tma ?? 0.1;
   const investimento = capex.valorFinalCliente;
 
-  const kwhInjetado = dim.consumoMedioMensal * (1 - tarifas.simultaneidadePercent);
+  // Mesmo ajuste de calcularContaMes1: sem isso, o payback assumiria que o sistema
+  // sempre cobre 100% do consumo, mesmo quando a potência ficou menor que o ideal
+  // (ex: limitada pela área do local).
+  const coberturaGeracao = dim.consumoSemTaxa > 0 ? Math.min(1, dim.geracaoMedia / dim.consumoSemTaxa) : 0;
+  const kwhInjetado = dim.consumoMedioMensal * (1 - tarifas.simultaneidadePercent) * coberturaGeracao;
   const icmsSobreTusdPorKwh = tarifas.tusdSemImposto * tarifas.icmsPercent;
 
   const linhas = [];
@@ -187,6 +205,7 @@ export function calcularPayback(dim, tarifas, capex, anoInicial, financeiro) {
   let economiaAcumuladaDescontada = 0;
   let contaSemSistemaAnual = dim.consumoMedioMensal * (tarifas.teSemImposto + tarifas.tusdSemImposto) * 12;
   let taxaDispAnualAtual = 12 * dim.taxaDisp * (tarifas.teSemImposto + tarifas.tusdSemImposto);
+  let custoNaoCompensadoAnualAtual = dim.consumoSemTaxa * (1 - coberturaGeracao) * (tarifas.teSemImposto + tarifas.tusdSemImposto) * 12;
 
   for (let i = 0; i < horizonte; i++) {
     const ano = anoInicial + i;
@@ -194,10 +213,15 @@ export function calcularPayback(dim, tarifas, capex, anoInicial, financeiro) {
     if (i > 0) {
       contaSemSistemaAnual *= 1 + taxaInflacaoEnergia;
       taxaDispAnualAtual *= 1 + taxaInflacaoEnergia;
+      custoNaoCompensadoAnualAtual *= 1 + taxaInflacaoEnergia;
     }
     const fioBDescontoRate = fioBPercent(ano) * tarifas.fioBRate;
     const contaComSistemaAnual =
-      taxaDispAnualAtual + tarifas.iluminacaoPublica * 12 + kwhInjetado * icmsSobreTusdPorKwh * 12 + kwhInjetado * fioBDescontoRate * 12;
+      taxaDispAnualAtual +
+      tarifas.iluminacaoPublica * 12 +
+      kwhInjetado * icmsSobreTusdPorKwh * 12 +
+      kwhInjetado * fioBDescontoRate * 12 +
+      custoNaoCompensadoAnualAtual;
 
     const economia = contaSemSistemaAnual - contaComSistemaAnual;
     economiaAcumulada += economia;
