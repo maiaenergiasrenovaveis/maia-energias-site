@@ -63,6 +63,23 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
 
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Consumo mensal (kWh) — últimos 12 meses</h2>
+          <div class="mb-2">
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Mês da 1ª coluna (nem sempre é janeiro)</label>
+            <select id="s-mes-inicial" class="rounded-lg border border-slate-300 px-2 py-1.5 text-xs">
+              <option value="0">Janeiro</option>
+              <option value="1">Fevereiro</option>
+              <option value="2">Março</option>
+              <option value="3">Abril</option>
+              <option value="4">Maio</option>
+              <option value="5">Junho</option>
+              <option value="6">Julho</option>
+              <option value="7">Agosto</option>
+              <option value="8">Setembro</option>
+              <option value="9">Outubro</option>
+              <option value="10">Novembro</option>
+              <option value="11">Dezembro</option>
+            </select>
+          </div>
           <div class="flex items-center gap-2 mb-2">
             <input id="s-consumo-media" type="number" placeholder="Preencher os 12 com um valor médio" class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             <button type="button" id="s-consumo-aplicar" class="text-xs font-semibold text-maia-blue-dark whitespace-nowrap">Aplicar a todos</button>

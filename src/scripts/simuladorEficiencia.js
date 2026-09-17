@@ -155,6 +155,25 @@ carregarListaSimulacoes();
 let solarInited = false;
 let cidades = null;
 let chartGeracao, chartPayback;
+// Irradiação (índice de sol pleno) por mês do CALENDÁRIO, não por posição na grade —
+// a grade pode começar em qualquer mês (histórico de consumo nem sempre começa em janeiro).
+const IRRADIACAO_POR_MES_CALENDARIO = [4.7, 5.25, 4.82, 4.7, 4.21, 4.13, 4.15, 4.99, 4.46, 4.6, 4.66, 5.01];
+let mesesRotacionados = MESES;
+
+function atualizarLabelsMeses() {
+  const mesInicial = Number($("s-mes-inicial").value) || 0;
+  mesesRotacionados = MESES.map((_, i) => MESES[(mesInicial + i) % 12]);
+  mesesRotacionados.forEach((mes, i) => {
+    const consumoInput = $(`s-consumo-${i}`);
+    const irrInput = $(`s-irr-${i}`);
+    if (consumoInput) consumoInput.previousElementSibling.textContent = mes;
+    if (irrInput) {
+      irrInput.previousElementSibling.textContent = mes;
+      const calendarMonth = (mesInicial + i) % 12;
+      irrInput.value = IRRADIACAO_POR_MES_CALENDARIO[calendarMonth];
+    }
+  });
+}
 
 async function carregarCidades() {
   if (cidades) return cidades;
@@ -170,20 +189,23 @@ function initSolar() {
   $("s-ano-inicial").value = new Date().getFullYear();
   $("s-proposta-codigo").value = gerarCodigoProposta("SOL");
 
-  // Grids de consumo e irradiação
-  const consumoDefaults = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-  const irradiacaoDefaults = [4.7, 5.25, 4.82, 4.7, 4.21, 4.13, 4.15, 4.99, 4.46, 4.6, 4.66, 5.01];
+  // Grids de consumo e irradiação (labels iniciais em JAN..DEZ; ajustadas se o mês inicial mudar)
   const consumoGrid = $("s-consumo-grid");
   const irradiacaoGrid = $("s-irradiacao-grid");
   MESES.forEach((mes, i) => {
     consumoGrid.insertAdjacentHTML(
       "beforeend",
-      `<div><label class="block text-[10px] text-slate-400">${mes}</label><input id="s-consumo-${i}" data-consumo-idx="${i}" type="number" value="${consumoDefaults[i]}" class="w-full rounded border border-slate-300 px-1.5 py-1 text-xs" /></div>`
+      `<div><label class="block text-[10px] text-slate-400">${mes}</label><input id="s-consumo-${i}" data-consumo-idx="${i}" type="number" value="0" class="w-full rounded border border-slate-300 px-1.5 py-1 text-xs" /></div>`
     );
     irradiacaoGrid.insertAdjacentHTML(
       "beforeend",
-      `<div><label class="block text-[10px] text-slate-400">${mes}</label><input id="s-irr-${i}" data-irr-idx="${i}" type="number" step="0.01" value="${irradiacaoDefaults[i]}" class="w-full rounded border border-slate-300 px-1.5 py-1 text-xs" /></div>`
+      `<div><label class="block text-[10px] text-slate-400">${mes}</label><input id="s-irr-${i}" data-irr-idx="${i}" type="number" step="0.01" value="${IRRADIACAO_POR_MES_CALENDARIO[i]}" class="w-full rounded border border-slate-300 px-1.5 py-1 text-xs" /></div>`
     );
+  });
+
+  $("s-mes-inicial").addEventListener("change", () => {
+    atualizarLabelsMeses();
+    computeSolar();
   });
 
   $("s-consumo-aplicar").addEventListener("click", () => {
@@ -341,7 +363,7 @@ function renderChartGeracao(geracaoMensal) {
   chartGeracao = new Chart(ctx, {
     type: "bar",
     data: {
-      labels: MESES,
+      labels: mesesRotacionados,
       datasets: [{ label: "Geração (kWh)", data: geracaoMensal, backgroundColor: "#1c75bc" }],
     },
     options: { responsive: true, plugins: { legend: { display: false } } },
