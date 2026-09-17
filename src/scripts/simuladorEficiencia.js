@@ -2,7 +2,7 @@ import { MESES, calcularDimensionamento, calcularAreaModulos, calcularModulosQue
 import { calcularBESS, calcularCenariosGrupoA } from "../lib/dimensionamentoBESS.js";
 import { calcularInvestimentoMigracao, calcularCenariosMigracao } from "../lib/migracaoGrupoA.js";
 import { calcularDimensionamentoEletrico, MATERIAIS_CONDUTOR as MATERIAIS_CONDUTOR_LABEL } from "../lib/dimensionamentoEletrico.js";
-import { gerarPropostaPdf } from "./pdfProposta.js";
+import { gerarPropostaPdf, gerarDatasheetPdf } from "./pdfProposta.js";
 
 const $ = (id) => document.getElementById(id);
 const brl = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -690,6 +690,7 @@ async function exportarPdfSolar() {
     formaPagamento: $("s-forma-pagamento").value,
     prazoExecucaoDias: $("s-prazo-execucao").value || "—",
     validadeDias: $("s-validade-proposta").value || "—",
+    observacoes: $("s-observacoes").value,
     cronograma: [
       "Etapa 1: engenharia de detalhamento, compra de materiais e solicitação de acesso à distribuidora.",
       "Etapa 2: instalação física dos módulos, inversor e estrutura de fixação.",
@@ -943,6 +944,7 @@ async function exportarPdfBess() {
     formaPagamento: modoAquisicao === "capex" ? $("b-forma-pagamento").value : "Assinatura mensal (EaaS) — sem investimento inicial",
     prazoExecucaoDias: $("b-prazo-execucao").value || "—",
     validadeDias: $("b-validade-proposta").value || "—",
+    observacoes: $("b-observacoes").value,
     cronograma: [
       "Etapa 1: engenharia de detalhamento, dimensionamento final e compra de equipamentos.",
       "Etapa 2: instalação física do banco de baterias e integração com o quadro elétrico, sem interromper a operação.",
@@ -1133,6 +1135,7 @@ async function exportarPdfMigracao() {
     formaPagamento: $("m-forma-pagamento").value,
     prazoExecucaoDias: $("m-prazo-execucao").value || "—",
     validadeDias: $("m-validade-proposta").value || "—",
+    observacoes: $("m-observacoes").value,
     cronograma: [
       "Etapa 1: projeto elétrico da subestação, ART e solicitação de acesso junto à distribuidora.",
       "Etapa 2: fornecimento e instalação do transformador e obra civil da cabine primária.",
@@ -1147,10 +1150,13 @@ async function exportarPdfMigracao() {
 
 // ---------- Carregador veicular: dimensionamento elétrico (NBR 5410) ----------
 let carregadorInited = false;
+let ultimoResultadoCarregador = null;
 
 function initCarregador() {
   if (carregadorInited) return;
   carregadorInited = true;
+
+  $("c-ficha-codigo").value = gerarCodigoProposta("EVSE");
 
   document.querySelectorAll("#painel-carregador input, #painel-carregador select").forEach((el) => {
     el.addEventListener("input", computeCarregador);
@@ -1165,6 +1171,7 @@ function initCarregador() {
     computeCarregador();
   });
 
+  $("c-export-pdf").addEventListener("click", exportarPdfCarregador);
   $("c-salvar").addEventListener("click", () => salvarSimulacao("carregador", "painel-carregador", "c-cliente", "c-salvar-status"));
 
   computeCarregador();
@@ -1179,6 +1186,7 @@ function computeCarregador() {
     $("c-condutores").innerHTML = "";
     $("c-protecoes").innerHTML = "";
     $("c-avisos").innerHTML = "";
+    ultimoResultadoCarregador = null;
     return;
   }
 
@@ -1224,4 +1232,63 @@ function computeCarregador() {
   $("c-avisos").innerHTML = r.avisos.length
     ? r.avisos.map((a) => `<div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 mb-2">⚠ ${a}</div>`).join("")
     : "";
+
+  ultimoResultadoCarregador = r;
+}
+
+async function exportarPdfCarregador() {
+  if (!ultimoResultadoCarregador) return;
+  const r = ultimoResultadoCarregador;
+  const cliente = $("c-cliente").value || "Cliente";
+
+  const parametros = [
+    ["Potência do carregador", `${num(Number($("c-potencia").value), 1)} kW`],
+    ["Tensão de alimentação", `${$("c-tensao").value} V`],
+    ["Tipo de ligação", $("c-ligacao").selectedOptions[0].text],
+    ["Fator de potência (cosφ)", num(Number($("c-fp").value), 2)],
+    ["Fator de continuidade (carga contínua)", `×${num(r.fatorContinuidade, 2)}`],
+    ["Material do condutor", MATERIAIS_CONDUTOR_LABEL[r.material]],
+    ["Distância do QDC ao carregador", `${num(Number($("c-distancia").value), 1)} m`],
+    ["Método de instalação", $("c-metodo").selectedOptions[0].text],
+    ["Temperatura ambiente/solo", `${num(Number($("c-temperatura").value), 0)} °C`],
+    ["Circuitos agrupados", $("c-agrupamento").value],
+    ["Queda de tensão máxima admissível", `${num(Number($("c-queda-max").value), 1)}%`],
+  ];
+
+  const resultado = [
+    ["Corrente nominal do carregador", `${num(r.correnteNominal, 1)} A`],
+    ["Corrente de projeto", `${num(r.correnteProjeto, 1)} A`],
+    ["Fator de correção (temp. × agrupamento)", num(r.fatorTemp * r.fatorAgrup, 2)],
+    ["Seção do cabo — fase", `${r.secaoFaseMm2} mm²`],
+    ["Seção do cabo — neutro", `${r.secaoNeutroMm2} mm²`],
+    ["Seção do cabo — terra (PE)", `${r.secaoTerraMm2} mm²`],
+    ["Capacidade de condução corrigida (Iz)", `${num(r.capacidadeCaboA, 1)} A`],
+    ["Eletroduto recomendado", r.eletroduto],
+    ["Queda de tensão calculada", `${num(r.quedaTensaoPercent, 2)}%`],
+  ];
+
+  const protecoes = [
+    ["Disjuntor", `${r.disjuntorA} A, curva ${r.disjuntorCurva}`],
+    ["DPS", `Classe ${r.dps.classe} · Uc ${r.dps.ucV} V · In ${r.dps.inKa} kA · Imáx ${r.dps.imaxKa} kA`],
+    ["DR (proteção diferencial-residual)", `Tipo ${r.dr.tipo} · ${r.dr.sensibilidadeMa} mA · ${r.dr.nominalA} A`],
+  ];
+
+  await gerarDatasheetPdf({
+    subtitulo: "Dimensionamento Elétrico — Carregador Veicular (NBR 5410)",
+    codigo: $("c-ficha-codigo").value || "—",
+    cliente,
+    responsavelNome: $("c-responsavel-nome").value,
+    responsavelCargo: $("c-responsavel-cargo").value,
+    email: $("c-email").value,
+    introducao: `Ficha técnica de referência para o circuito dedicado do carregador veicular de ${cliente}, dimensionado a partir dos critérios gerais da NBR 5410 (ampacidade, quedas de tensão e proteções).${$("c-observacoes").value ? ` Observações: ${$("c-observacoes").value}` : ""}`,
+    tabelas: [
+      { titulo: "1. Parâmetros de Entrada", head: ["Parâmetro", "Valor"], body: parametros },
+      { titulo: "2. Condutores e Eletroduto", head: ["Item", "Especificação"], body: resultado },
+      { titulo: "3. Proteções", head: ["Item", "Especificação"], body: protecoes },
+    ],
+    avisos: r.avisos,
+    notaRodape:
+      "Dimensionamento de referência a partir dos critérios gerais da NBR 5410 (ampacidade — métodos B1/C/D/F, isolação PVC 70°C — e fatores de correção de temperatura/agrupamento), para pré-orçamento e conversa comercial. Não substitui projeto elétrico executivo assinado por engenheiro responsável (ART). Ampacidade e resistividade do alumínio estimadas a partir da tabela de cobre (fator ~0,78) — confirme com a tabela oficial. Conexões em alumínio exigem conectores bimetálicos e composto antioxidante. DR fixado em Tipo A partindo do princípio de que o carregador já traz proteção interna Tipo B/RDC-DD — confirme na ficha técnica do equipamento. Confirme sempre seção final, disjuntor, DPS e DR com o projetista responsável.",
+    fileName: `ficha-tecnica-carregador-${(cliente || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`,
+  });
 }

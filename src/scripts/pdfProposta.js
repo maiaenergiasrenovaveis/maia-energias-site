@@ -145,7 +145,7 @@ class Builder {
   }
 }
 
-function desenharCabecalho(doc, logo, { subtitulo, codigoProposta, dataProposta }) {
+function desenharCabecalho(doc, logo, { titulo = "PROPOSTA COMERCIAL", subtitulo, codigoProposta, codigoLabel = "Proposta", dataProposta }) {
   if (logo) {
     // A arte do logo.png tem bastante espaço em branco acima/abaixo e o texto
     // "ENERGIAS RENOVÁVEIS" é uma legenda pequena por baixo de "MAIA" — precisa de
@@ -157,17 +157,43 @@ function desenharCabecalho(doc, logo, { subtitulo, codigoProposta, dataProposta 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
   doc.setTextColor(...NAVY);
-  doc.text("PROPOSTA COMERCIAL", PAGE_W - MARGIN_R, 18, { align: "right" });
+  doc.text(titulo, PAGE_W - MARGIN_R, 18, { align: "right" });
   doc.setFontSize(10.5);
   doc.setTextColor(...NAVY_DARK);
   doc.text(subtitulo, PAGE_W - MARGIN_R, 24, { align: "right" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...GRAY_MUTED);
-  doc.text(`Proposta ${codigoProposta}  ·  ${dataProposta}`, PAGE_W - MARGIN_R, 29.5, { align: "right" });
+  doc.text(`${codigoLabel} ${codigoProposta}  ·  ${dataProposta}`, PAGE_W - MARGIN_R, 29.5, { align: "right" });
   doc.setDrawColor(...NAVY);
   doc.setLineWidth(0.4);
   doc.line(MARGIN_L, 33, PAGE_W - MARGIN_R, 33);
+}
+
+function desenharPreparadoPara(doc, b, { cliente, responsavelNome, responsavelCargo, email }) {
+  doc.setFillColor(246, 249, 252);
+  doc.roundedRect(MARGIN_L, b.y, CONTENT_W, 20, 2, 2, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...NAVY);
+  doc.text("PREPARADO PARA", MARGIN_L + 4, b.y + 6);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...GRAY_TEXT);
+  doc.text(`Cliente: ${cliente || "—"}`, MARGIN_L + 4, b.y + 12);
+  const acLine = [responsavelNome && `A/C: ${responsavelNome}`, responsavelCargo, email].filter(Boolean).join("   ·   ");
+  doc.text(acLine || "—", MARGIN_L + 4, b.y + 17);
+  b.y += 26;
+}
+
+function desenharNotaRodape(doc, b, texto) {
+  if (!texto) return;
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...GRAY_MUTED);
+  const linhas = doc.splitTextToSize(texto, CONTENT_W);
+  b.ensure(linhas.length * 3.5 + 2);
+  doc.text(linhas, MARGIN_L, b.y);
 }
 
 function desenharRodapes(doc) {
@@ -205,6 +231,7 @@ function desenharRodapes(doc) {
  * @param {string} opts.formaPagamento
  * @param {number} opts.prazoExecucaoDias
  * @param {number} opts.validadeDias
+ * @param {string} [opts.observacoes] - texto livre opcional, exibido após as condições comerciais
  * @param {string[]} opts.cronograma
  * @param {string} opts.notaRodape
  * @param {string} opts.fileName
@@ -221,21 +248,7 @@ export async function gerarPropostaPdf(opts) {
 
   const b = new Builder(doc, logo);
   b.y = 39;
-
-  // Preparado para
-  doc.setFillColor(246, 249, 252);
-  doc.roundedRect(MARGIN_L, b.y, CONTENT_W, 20, 2, 2, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...NAVY);
-  doc.text("PREPARADO PARA", MARGIN_L + 4, b.y + 6);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.5);
-  doc.setTextColor(...GRAY_TEXT);
-  doc.text(`Cliente: ${opts.cliente || "—"}`, MARGIN_L + 4, b.y + 12);
-  const acLine = [opts.responsavelNome && `A/C: ${opts.responsavelNome}`, opts.responsavelCargo, opts.email].filter(Boolean).join("   ·   ");
-  doc.text(acLine || "—", MARGIN_L + 4, b.y + 17);
-  b.y += 26;
+  desenharPreparadoPara(doc, b, opts);
 
   b.titulo("1. Resumo Executivo");
   b.paragrafo(opts.resumoExecutivo);
@@ -268,6 +281,7 @@ export async function gerarPropostaPdf(opts) {
       ["Validade desta proposta", `${opts.validadeDias} dias`],
     ]
   );
+  if (opts.observacoes) b.paragrafo(`Observações: ${opts.observacoes}`);
 
   b.titulo("6. Cronograma Estimado de Implementação");
   b.bullets(opts.cronograma);
@@ -276,15 +290,56 @@ export async function gerarPropostaPdf(opts) {
   b.paragrafo("Para darmos início ao projeto, por favor assine e date o campo abaixo:");
   b.assinaturas(`${opts.cliente || "Cliente"}${opts.responsavelCargo ? " — " + opts.responsavelCargo : ""}`, `${site.legalName}`);
 
-  if (opts.notaRodape) {
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(7.5);
-    doc.setTextColor(...GRAY_MUTED);
-    const linhas = doc.splitTextToSize(opts.notaRodape, CONTENT_W);
-    b.ensure(linhas.length * 3.5 + 2);
-    doc.text(linhas, MARGIN_L, b.y);
+  desenharNotaRodape(doc, b, opts.notaRodape);
+  desenharRodapes(doc);
+  doc.save(opts.fileName);
+}
+
+/**
+ * Ficha técnica (datasheet) — documento técnico simples, sem seções comerciais
+ * (sem investimento, forma de pagamento, cronograma ou assinatura). Usado pelo
+ * módulo de dimensionamento elétrico do carregador veicular (NBR 5410), que é
+ * uma calculadora técnica e não uma proposta comercial.
+ * @param {object} opts
+ * @param {string} opts.subtitulo
+ * @param {string} opts.codigo
+ * @param {string} opts.cliente
+ * @param {string} [opts.responsavelNome]
+ * @param {string} [opts.responsavelCargo]
+ * @param {string} [opts.email]
+ * @param {string} [opts.introducao] - parágrafo curto de abertura
+ * @param {{titulo: string, head: string[], body: (string|number)[][]}[]} opts.tabelas - uma ou mais tabelas, em ordem
+ * @param {string[]} [opts.avisos]
+ * @param {string} [opts.notaRodape]
+ * @param {string} opts.fileName
+ */
+export async function gerarDatasheetPdf(opts) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const logo = await carregarLogo();
+
+  const hoje = new Date();
+  const dataProposta = hoje.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+
+  desenharCabecalho(doc, logo, { titulo: "FICHA TÉCNICA", subtitulo: opts.subtitulo, codigoProposta: opts.codigo, codigoLabel: "Ficha", dataProposta });
+
+  const b = new Builder(doc, logo);
+  b.y = 39;
+  desenharPreparadoPara(doc, b, opts);
+
+  if (opts.introducao) b.paragrafo(opts.introducao);
+
+  opts.tabelas.forEach(({ titulo, head, body }) => {
+    b.titulo(titulo);
+    b.tabela(head, body);
+  });
+
+  if (opts.avisos?.length) {
+    b.titulo("Avisos");
+    b.bullets(opts.avisos);
   }
 
+  desenharNotaRodape(doc, b, opts.notaRodape);
   desenharRodapes(doc);
   doc.save(opts.fileName);
 }

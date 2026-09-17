@@ -255,6 +255,7 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
           <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Forma de pagamento</label><input id="s-forma-pagamento" type="text" value="40% de sinal, 30% na entrega dos materiais e 30% na entrega técnica" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
           <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Prazo de execução (dias úteis)</label><input id="s-prazo-execucao" type="number" value="15" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
           <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Validade da proposta (dias)</label><input id="s-validade-proposta" type="number" value="10" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div class="sm:col-span-3"><label class="block text-[11px] font-semibold text-slate-500 mb-1">Observações (opcional)</label><textarea id="s-observacoes" rows="2" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" placeholder="Alguma condição especial, ressalva ou observação para esta proposta..."></textarea></div>
         </div>
       </div>
 
@@ -425,6 +426,7 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
           <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Forma de pagamento</label><input id="b-forma-pagamento" type="text" value="40% de sinal, 30% na entrega dos materiais e 30% na entrega técnica" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
           <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Prazo de execução (dias úteis)</label><input id="b-prazo-execucao" type="number" value="20" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
           <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Validade da proposta (dias)</label><input id="b-validade-proposta" type="number" value="10" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div class="sm:col-span-3"><label class="block text-[11px] font-semibold text-slate-500 mb-1">Observações (opcional)</label><textarea id="b-observacoes" rows="2" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" placeholder="Alguma condição especial, ressalva ou observação para esta proposta..."></textarea></div>
         </div>
       </div>
 
@@ -586,6 +588,7 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
           <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Forma de pagamento</label><input id="m-forma-pagamento" type="text" value="40% de sinal, 30% na entrega dos materiais e 30% na entrega técnica" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
           <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Prazo de execução (dias úteis)</label><input id="m-prazo-execucao" type="number" value="30" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
           <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Validade da proposta (dias)</label><input id="m-validade-proposta" type="number" value="10" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div class="sm:col-span-3"><label class="block text-[11px] font-semibold text-slate-500 mb-1">Observações (opcional)</label><textarea id="m-observacoes" rows="2" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" placeholder="Alguma condição especial, ressalva ou observação para esta proposta..."></textarea></div>
         </div>
       </div>
 
@@ -676,7 +679,19 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         ⚠ Dimensionamento de <strong>referência</strong>, a partir dos critérios gerais da NBR 5410 (ampacidade — métodos B1/C/D/F, isolação PVC 70°C — e fatores de correção de temperatura/agrupamento), para pré-orçamento e conversa comercial. Não substitui projeto elétrico executivo assinado por engenheiro responsável (ART). A ampacidade e a resistividade do <strong>alumínio</strong> aqui são estimadas a partir da tabela de cobre (fator ~0,78), não uma tabela própria — confirme com a tabela oficial antes de fechar o projeto, e lembre que conexões em alumínio exigem conectores bimetálicos e composto antioxidante apropriados (terminais de cobre comum não servem). O DR foi fixado em <strong>Tipo A</strong> partindo do princípio de que o próprio carregador já traz proteção interna contra corrente de fuga contínua (Tipo B/RDC-DD) — confirme essa característica na ficha técnica do equipamento antes de aplicar em campo. Confirme sempre seção final, disjuntor, DPS e DR com o projetista, em especial se houver mais de um carregador no mesmo circuito/QDC.
       </div>
 
+      <div class="rounded-xl bg-white border border-slate-200 p-5 mb-6">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Dados da ficha técnica</h2>
+        <div class="grid sm:grid-cols-3 gap-3 text-sm">
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Código da ficha</label><input id="c-ficha-codigo" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">A/C (responsável no cliente)</label><input id="c-responsavel-nome" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Cargo</label><input id="c-responsavel-cargo" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">E-mail do cliente</label><input id="c-email" type="email" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div class="sm:col-span-2"><label class="block text-[11px] font-semibold text-slate-500 mb-1">Observações (opcional)</label><textarea id="c-observacoes" rows="1" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" placeholder="Alguma condição especial ou observação..."></textarea></div>
+        </div>
+      </div>
+
       <div class="flex flex-wrap items-center gap-3">
+        <button type="button" id="c-export-pdf" class="rounded-lg bg-maia-orange hover:bg-maia-orange-dark text-white font-semibold px-5 py-2.5 text-sm transition-colors">Exportar ficha técnica em PDF</button>
         <button type="button" id="c-salvar" class="rounded-lg bg-white border border-maia-navy/30 hover:bg-slate-50 text-maia-navy font-semibold px-5 py-2.5 text-sm transition-colors">Salvar simulação</button>
         <span id="c-salvar-status" class="text-xs text-slate-400"></span>
       </div>
