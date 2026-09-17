@@ -19,6 +19,11 @@
       "binding": "DB",
       "database_name": "maia-eletropostos-db",
       "database_id": "cceed314-92ab-41c2-8217-a18221c0b31f"
+    },
+    {
+      "binding": "SIMULADOR_DB",
+      "database_name": "maia-simulador-db",
+      "database_id": "071cdbf1-ad6c-4ec8-ac92-1eea2dce88b1"
     }
   ],
   "triggers": {

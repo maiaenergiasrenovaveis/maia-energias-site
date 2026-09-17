@@ -24,6 +24,14 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
       </button>
     </div>
 
+    <!-- Simulações salvas -->
+    <div id="simulacoes-salvas-wrap" class="mb-8">
+      <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-3">Simulações salvas</h2>
+      <div id="simulacoes-salvas-lista" class="rounded-xl bg-white border border-slate-200 divide-y divide-slate-100 text-sm">
+        <p class="p-4 text-slate-400">Carregando...</p>
+      </div>
+    </div>
+
     <!-- ============ GRUPO B: SOLAR ============ -->
     <div id="painel-solar" class="hidden">
       <button type="button" class="voltar-btn text-xs font-semibold text-maia-blue-dark mb-4">← Trocar grupo tarifário</button>
@@ -175,7 +183,11 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         </div>
       </div>
 
-      <button type="button" id="s-export-pdf" class="rounded-lg bg-maia-orange hover:bg-maia-orange-dark text-white font-semibold px-5 py-2.5 text-sm transition-colors">Exportar proposta em PDF</button>
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="button" id="s-export-pdf" class="rounded-lg bg-maia-orange hover:bg-maia-orange-dark text-white font-semibold px-5 py-2.5 text-sm transition-colors">Exportar proposta em PDF</button>
+        <button type="button" id="s-salvar" class="rounded-lg bg-white border border-maia-navy/30 hover:bg-slate-50 text-maia-navy font-semibold px-5 py-2.5 text-sm transition-colors">Salvar simulação</button>
+        <span id="s-salvar-status" class="text-xs text-slate-400"></span>
+      </div>
     </div>
 
     <!-- ============ GRUPO A: BESS / EFICIÊNCIA ============ -->
@@ -283,7 +295,11 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         </div>
       </div>
 
-      <button type="button" id="b-export-pdf" class="rounded-lg bg-maia-orange hover:bg-maia-orange-dark text-white font-semibold px-5 py-2.5 text-sm transition-colors">Exportar proposta em PDF</button>
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="button" id="b-export-pdf" class="rounded-lg bg-maia-orange hover:bg-maia-orange-dark text-white font-semibold px-5 py-2.5 text-sm transition-colors">Exportar proposta em PDF</button>
+        <button type="button" id="b-salvar" class="rounded-lg bg-white border border-maia-navy/30 hover:bg-slate-50 text-maia-navy font-semibold px-5 py-2.5 text-sm transition-colors">Salvar simulação</button>
+        <span id="b-salvar-status" class="text-xs text-slate-400"></span>
+      </div>
     </div>
   </div>
 

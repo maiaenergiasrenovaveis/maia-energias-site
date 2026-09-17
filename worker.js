@@ -758,11 +758,65 @@ function requireBasicAuth() {
   });
 }
 
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
+}
+
+// API de simulações salvas (/interno/api/simulacoes) — banco D1 dedicado
+// (maia-simulador-db), separado do banco do portal de eletropostos para não
+// misturar dados dos dois projetos. Já protegida pelo Basic Auth de /interno/*.
+async function handleSimulacoesApi(request, env) {
+  const url = new URL(request.url);
+  const db = env.SIMULADOR_DB;
+  const idMatch = url.pathname.match(/^\/interno\/api\/simulacoes\/(\d+)$/);
+
+  if (request.method === "GET" && idMatch) {
+    const row = await db.prepare("SELECT * FROM simulacoes WHERE id = ?").bind(Number(idMatch[1])).first();
+    if (!row) return jsonResponse({ error: "not_found" }, 404);
+    return jsonResponse({ ...row, dados: JSON.parse(row.dados) });
+  }
+
+  if (request.method === "DELETE" && idMatch) {
+    await db.prepare("DELETE FROM simulacoes WHERE id = ?").bind(Number(idMatch[1])).run();
+    return jsonResponse({ ok: true });
+  }
+
+  if (request.method === "GET" && url.pathname === "/interno/api/simulacoes") {
+    const tipo = url.searchParams.get("tipo");
+    const query = tipo
+      ? db.prepare("SELECT id, tipo, cliente, criado_em, atualizado_em FROM simulacoes WHERE tipo = ? ORDER BY criado_em DESC LIMIT 200").bind(tipo)
+      : db.prepare("SELECT id, tipo, cliente, criado_em, atualizado_em FROM simulacoes ORDER BY criado_em DESC LIMIT 200");
+    const { results } = await query.all();
+    return jsonResponse({ results });
+  }
+
+  if (request.method === "POST" && url.pathname === "/interno/api/simulacoes") {
+    const body = await request.json().catch(() => null);
+    if (!body || !body.tipo || !body.dados) return jsonResponse({ error: "invalid_body" }, 400);
+    const now = Date.now();
+    const result = await db
+      .prepare("INSERT INTO simulacoes (tipo, cliente, criado_em, atualizado_em, dados) VALUES (?, ?, ?, ?, ?)")
+      .bind(body.tipo, body.cliente || null, now, now, JSON.stringify(body.dados))
+      .run();
+    return jsonResponse({ id: result.meta.last_row_id }, 201);
+  }
+
+  return jsonResponse({ error: "not_found" }, 404);
+}
+
 async function handleFetch(request, env, ctx) {
   const url = new URL(request.url);
 
   if (url.pathname === "/interno" || url.pathname.startsWith("/interno/")) {
     if (!checkBasicAuth(request, env)) return requireBasicAuth();
+  }
+
+  if (url.pathname === "/interno/api/simulacoes" || /^\/interno\/api\/simulacoes\/\d+$/.test(url.pathname)) {
+    try {
+      return await handleSimulacoesApi(request, env);
+    } catch (err) {
+      return jsonResponse({ error: String(err) }, 500);
+    }
   }
 
   if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/eletropostos-sp") {

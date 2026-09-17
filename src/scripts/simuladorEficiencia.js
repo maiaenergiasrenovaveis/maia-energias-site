@@ -17,6 +17,7 @@ const gerarCodigoProposta = (prefixo) => {
 document.querySelectorAll(".grupo-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     $("grupo-selector").classList.add("hidden");
+    $("simulacoes-salvas-wrap").classList.add("hidden");
     if (btn.dataset.grupo === "B") {
       $("painel-solar").classList.remove("hidden");
       initSolar();
@@ -31,8 +32,122 @@ document.querySelectorAll(".voltar-btn").forEach((btn) => {
     $("painel-solar").classList.add("hidden");
     $("painel-bess").classList.add("hidden");
     $("grupo-selector").classList.remove("hidden");
+    $("simulacoes-salvas-wrap").classList.remove("hidden");
   });
 });
+
+// ---------- Simulações salvas (banco compartilhado, /interno/api/simulacoes) ----------
+function coletarCamposPainel(painelId) {
+  const painel = document.getElementById(painelId);
+  const dados = {};
+  painel.querySelectorAll("input[id], select[id]").forEach((el) => {
+    dados[el.id] = el.type === "checkbox" ? el.checked : el.value;
+  });
+  return dados;
+}
+
+function aplicarCamposPainel(painelId, dados) {
+  const painel = document.getElementById(painelId);
+  Object.entries(dados || {}).forEach(([id, value]) => {
+    const el = painel.querySelector(`#${CSS.escape(id)}`);
+    if (!el) return;
+    if (el.type === "checkbox") el.checked = !!value;
+    else el.value = value;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+async function salvarSimulacao(tipo, painelId, clienteFieldId, statusElId) {
+  const status = $(statusElId);
+  status.textContent = "Salvando...";
+  try {
+    const dados = coletarCamposPainel(painelId);
+    const cliente = $(clienteFieldId).value || null;
+    const res = await fetch("/interno/api/simulacoes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tipo, cliente, dados }),
+    });
+    if (res.status === 500) {
+      const body = await res.json().catch(() => null);
+      if (body?.error?.includes("D1_ERROR") && body.error.includes("limit")) {
+        status.textContent = "Banco no limite diário de escrita — tente novamente mais tarde ou amanhã.";
+        return;
+      }
+    }
+    if (!res.ok) throw new Error("falha ao salvar");
+    status.textContent = "Simulação salva.";
+    carregarListaSimulacoes();
+    setTimeout(() => (status.textContent = ""), 4000);
+  } catch {
+    status.textContent = "Erro ao salvar — tente novamente.";
+  }
+}
+
+async function carregarSimulacao(id, tipo) {
+  const res = await fetch(`/interno/api/simulacoes/${id}`);
+  if (!res.ok) return;
+  const row = await res.json();
+  $("grupo-selector").classList.add("hidden");
+  $("simulacoes-salvas-wrap").classList.add("hidden");
+  if (tipo === "solar") {
+    $("painel-solar").classList.remove("hidden");
+    initSolar();
+    aplicarCamposPainel("painel-solar", row.dados);
+    computeSolar();
+  } else {
+    $("painel-bess").classList.remove("hidden");
+    initBess();
+    aplicarCamposPainel("painel-bess", row.dados);
+    computeBess();
+  }
+}
+
+async function excluirSimulacao(id) {
+  if (!confirm("Excluir esta simulação salva? Essa ação não pode ser desfeita.")) return;
+  try {
+    const res = await fetch(`/interno/api/simulacoes/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("falha ao excluir");
+    carregarListaSimulacoes();
+  } catch {
+    alert("Não foi possível excluir agora (o banco pode estar no limite diário de escrita). Tente novamente mais tarde.");
+  }
+}
+
+async function carregarListaSimulacoes() {
+  const container = $("simulacoes-salvas-lista");
+  try {
+    const res = await fetch("/interno/api/simulacoes");
+    const { results } = await res.json();
+    if (!results || !results.length) {
+      container.innerHTML = '<p class="p-4 text-slate-400">Nenhuma simulação salva ainda.</p>';
+      return;
+    }
+    container.innerHTML = results
+      .map(
+        (r) => `
+      <div class="flex items-center justify-between p-3 gap-3">
+        <div class="min-w-0">
+          <span class="text-[10px] font-bold uppercase tracking-wide ${r.tipo === "solar" ? "text-maia-blue-dark" : "text-maia-orange-dark"}">${r.tipo === "solar" ? "Grupo B · Solar" : "Grupo A · BESS"}</span>
+          <p class="font-semibold text-maia-navy truncate">${r.cliente || "(sem nome)"}</p>
+          <p class="text-[11px] text-slate-400">${new Date(r.criado_em).toLocaleString("pt-BR")}</p>
+        </div>
+        <div class="flex gap-3 shrink-0">
+          <button data-carregar="${r.id}" data-tipo="${r.tipo}" class="text-xs font-semibold text-maia-blue-dark whitespace-nowrap">Carregar</button>
+          <button data-excluir="${r.id}" class="text-xs font-semibold text-red-600 whitespace-nowrap">Excluir</button>
+        </div>
+      </div>`
+      )
+      .join("");
+    container.querySelectorAll("[data-carregar]").forEach((btn) => btn.addEventListener("click", () => carregarSimulacao(btn.dataset.carregar, btn.dataset.tipo)));
+    container.querySelectorAll("[data-excluir]").forEach((btn) => btn.addEventListener("click", () => excluirSimulacao(btn.dataset.excluir)));
+  } catch {
+    container.innerHTML = '<p class="p-4 text-red-500">Erro ao carregar simulações salvas.</p>';
+  }
+}
+
+carregarListaSimulacoes();
 
 // ============================================================
 // GRUPO B — SOLAR
@@ -63,11 +178,11 @@ function initSolar() {
   MESES.forEach((mes, i) => {
     consumoGrid.insertAdjacentHTML(
       "beforeend",
-      `<div><label class="block text-[10px] text-slate-400">${mes}</label><input data-consumo-idx="${i}" type="number" value="${consumoDefaults[i]}" class="w-full rounded border border-slate-300 px-1.5 py-1 text-xs" /></div>`
+      `<div><label class="block text-[10px] text-slate-400">${mes}</label><input id="s-consumo-${i}" data-consumo-idx="${i}" type="number" value="${consumoDefaults[i]}" class="w-full rounded border border-slate-300 px-1.5 py-1 text-xs" /></div>`
     );
     irradiacaoGrid.insertAdjacentHTML(
       "beforeend",
-      `<div><label class="block text-[10px] text-slate-400">${mes}</label><input data-irr-idx="${i}" type="number" step="0.01" value="${irradiacaoDefaults[i]}" class="w-full rounded border border-slate-300 px-1.5 py-1 text-xs" /></div>`
+      `<div><label class="block text-[10px] text-slate-400">${mes}</label><input id="s-irr-${i}" data-irr-idx="${i}" type="number" step="0.01" value="${irradiacaoDefaults[i]}" class="w-full rounded border border-slate-300 px-1.5 py-1 text-xs" /></div>`
     );
   });
 
@@ -107,6 +222,7 @@ function initSolar() {
   });
 
   $("s-export-pdf").addEventListener("click", exportarPdfSolar);
+  $("s-salvar").addEventListener("click", () => salvarSimulacao("solar", "painel-solar", "s-cliente", "s-salvar-status"));
 
   computeSolar();
 }
@@ -338,6 +454,7 @@ function initBess() {
   });
 
   $("b-export-pdf").addEventListener("click", exportarPdfBess);
+  $("b-salvar").addEventListener("click", () => salvarSimulacao("bess", "painel-bess", "b-cliente", "b-salvar-status"));
 
   computeBess();
 }
