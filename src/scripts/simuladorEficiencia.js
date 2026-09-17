@@ -1,7 +1,7 @@
 import { MESES, calcularDimensionamento, calcularAreaModulos, calcularModulosQueCabem, calcularCapex, calcularContaMes1, calcularPayback } from "../lib/dimensionamentoSolar.js";
 import { calcularBESS, calcularCenariosGrupoA } from "../lib/dimensionamentoBESS.js";
 import { calcularInvestimentoMigracao, calcularCenariosMigracao } from "../lib/migracaoGrupoA.js";
-import { calcularDimensionamentoEletrico } from "../lib/dimensionamentoEletrico.js";
+import { calcularDimensionamentoEletrico, MATERIAIS_CONDUTOR as MATERIAIS_CONDUTOR_LABEL } from "../lib/dimensionamentoEletrico.js";
 import { gerarPropostaPdf } from "./pdfProposta.js";
 
 const $ = (id) => document.getElementById(id);
@@ -1134,6 +1134,8 @@ function computeCarregador() {
     tensaoV: Number($("c-tensao").value) || 220,
     tipoLigacao: $("c-ligacao").value,
     fatorPotencia: Number($("c-fp").value) || 0.98,
+    fatorContinuidade: Number($("c-fator-continuidade").value) || 1.25,
+    material: $("c-material").value,
     distanciaM: Number($("c-distancia").value) || 0,
     quedaMaxPercent: Number($("c-queda-max").value) || 4,
     metodoInstalacao: $("c-metodo").value,
@@ -1143,14 +1145,15 @@ function computeCarregador() {
 
   $("c-result-cards").innerHTML = `
     ${cardHtml("Corrente de projeto", `${num(r.correnteProjeto, 1)} A`)}
-    ${cardHtml("Seção do cabo (fase)", `${r.secaoFaseMm2} mm²`)}
+    ${cardHtml("Seção do cabo (fase)", `${r.secaoFaseMm2} mm² (${MATERIAIS_CONDUTOR_LABEL[r.material]})`)}
     ${cardHtml("Disjuntor recomendado", `${r.disjuntorA} A · curva ${r.disjuntorCurva}`)}
     ${cardHtml("Queda de tensão calculada", `${num(r.quedaTensaoPercent, 2)}%`)}
   `;
 
   $("c-condutores").innerHTML = `
+    ${linhaHtml("Material do condutor", MATERIAIS_CONDUTOR_LABEL[r.material])}
     ${linhaHtml("Corrente nominal do carregador", `${num(r.correnteNominal, 1)} A`)}
-    ${linhaHtml("Corrente de projeto (carga contínua, ×1,25)", `${num(r.correnteProjeto, 1)} A`)}
+    ${linhaHtml(`Corrente de projeto (carga contínua, ×${num(r.fatorContinuidade, 2)})`, `${num(r.correnteProjeto, 1)} A`)}
     ${linhaHtml("Fator de correção (temp. × agrupamento)", num(r.fatorTemp * r.fatorAgrup, 2))}
     ${linhaHtml("Seção do cabo — fase", `${r.secaoFaseMm2} mm²`)}
     ${linhaHtml("Seção do cabo — neutro", `${r.secaoNeutroMm2} mm²`)}

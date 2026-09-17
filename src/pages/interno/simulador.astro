@@ -593,6 +593,13 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
           <div class="grid grid-cols-2 gap-2 text-sm">
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Potência do carregador (kW)</label><input id="c-potencia" type="number" step="0.1" value="22" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Material do condutor</label>
+              <select id="c-material" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                <option value="cobre" selected>Cobre</option>
+                <option value="aluminio">Alumínio</option>
+              </select>
+            </div>
+            <div>
               <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tensão de alimentação (V)</label>
               <select id="c-tensao" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
                 <option value="127">127 V</option>
@@ -609,6 +616,11 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
               </select>
             </div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Fator de potência (cosφ)</label><input id="c-fp" type="number" step="0.01" min="0.1" max="1" value="0.98" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Fator de continuidade (carga contínua)</label>
+              <input id="c-fator-continuidade" type="number" step="0.01" min="1" value="1.25" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+              <p class="text-[10px] text-slate-400 mt-1">Margem para carregamento contínuo (&gt;1h) — não é um valor fixado pela NBR 5410 (que não trata de EVSE especificamente); 1,25 espelha a exigência de 125% da norma americana NEC para EVSE. Ajuste para 1,00 se preferir sem margem.</p>
+            </div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Distância do QDC ao carregador (m)</label><input id="c-distancia" type="number" step="0.5" value="15" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Queda de tensão máx. (%)</label><input id="c-queda-max" type="number" step="0.1" value="4" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div>
@@ -642,7 +654,7 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
       <div id="c-avisos" class="mb-4"></div>
 
       <div class="rounded-xl bg-amber-50 border border-amber-200 p-4 text-xs text-amber-800 mb-6">
-        ⚠ Dimensionamento de <strong>referência</strong>, a partir dos critérios gerais da NBR 5410 (ampacidade — métodos B1/C, condutor de cobre, isolação PVC 70°C — e fatores de correção de temperatura/agrupamento), para pré-orçamento e conversa comercial. Não substitui projeto elétrico executivo assinado por engenheiro responsável (ART). O DR foi fixado em <strong>Tipo A</strong> partindo do princípio de que o próprio carregador já traz proteção interna contra corrente de fuga contínua (Tipo B/RDC-DD) — confirme essa característica na ficha técnica do equipamento antes de aplicar em campo. Confirme sempre seção final, disjuntor, DPS e DR com o projetista, em especial se houver mais de um carregador no mesmo circuito/QDC.
+        ⚠ Dimensionamento de <strong>referência</strong>, a partir dos critérios gerais da NBR 5410 (ampacidade — métodos B1/C/D/F, isolação PVC 70°C — e fatores de correção de temperatura/agrupamento), para pré-orçamento e conversa comercial. Não substitui projeto elétrico executivo assinado por engenheiro responsável (ART). A ampacidade e a resistividade do <strong>alumínio</strong> aqui são estimadas a partir da tabela de cobre (fator ~0,78), não uma tabela própria — confirme com a tabela oficial antes de fechar o projeto, e lembre que conexões em alumínio exigem conectores bimetálicos e composto antioxidante apropriados (terminais de cobre comum não servem). O DR foi fixado em <strong>Tipo A</strong> partindo do princípio de que o próprio carregador já traz proteção interna contra corrente de fuga contínua (Tipo B/RDC-DD) — confirme essa característica na ficha técnica do equipamento antes de aplicar em campo. Confirme sempre seção final, disjuntor, DPS e DR com o projetista, em especial se houver mais de um carregador no mesmo circuito/QDC.
       </div>
 
       <div class="flex flex-wrap items-center gap-3">

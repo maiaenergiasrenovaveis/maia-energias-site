@@ -45,9 +45,30 @@ export const METODOS_INSTALACAO = {
 
 const METODOS_ENTERRADOS = new Set(["D"]);
 
+export const MATERIAIS_CONDUTOR = { cobre: "Cobre", aluminio: "Alumínio" };
+
+// Ampacidade do alumínio não é uma tabela própria aqui — é estimada a partir da tabela de cobre
+// acima por um fator ~0,78 (relação aproximada e amplamente usada como referência rápida entre
+// as colunas de cobre e alumínio da própria Tabela 36 da NBR5410; a norma tabela os dois
+// materiais separadamente com pequenas variações por seção que este fator único não replica
+// exatamente — para o dimensionamento final, usar a tabela oficial). Resistividade também é
+// maior (~1,64x a do cobre), o que penaliza mais a queda de tensão em alumínio a igual seção.
+const FATOR_AMPACIDADE_ALUMINIO = 0.78;
+const RESISTIVIDADE = { cobre: 0.0225, aluminio: 0.037 }; // Ω·mm²/m, ~70°C (aprox.)
+// Condutor de alumínio abaixo de 16mm² não é prática usual em instalações fixas no Brasil
+// (fragilidade mecânica/conectores) — cobre permanece com o mínimo de 2,5mm² da NBR5410 p/ força.
+const SECAO_MINIMA = { cobre: 2.5, aluminio: 16 };
+
 const SECOES_PADRAO = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240, 300];
-const DISJUNTORES_PADRAO = [10, 16, 20, 25, 32, 40, 50, 63, 70, 80, 100, 125, 150, 175, 200, 225, 250];
-const DR_PADRAO = [25, 40, 63, 80, 100, 125];
+// Degraus de disjuntor em caixa moldada mais comuns nos catálogos usados no Brasil (WEG DWmax,
+// Siemens 3VA, Schneider Compact NSX) — de 125A pra cima o degrau padrão é 160A, não 150/175A
+// (isso é mais uma convenção norte-americana/NEMA; raramente aparece em catálogo por aqui).
+const DISJUNTORES_PADRAO = [10, 16, 20, 25, 32, 40, 50, 63, 70, 80, 100, 125, 160, 200, 225, 250, 315, 400, 500, 630];
+// DR (interruptor diferencial-residual) — degraus comerciais típicos. Precisa ir tão longe
+// quanto DISJUNTORES_PADRAO: um DR com corrente nominal MENOR que o disjuntor que ele protege
+// fica subdimensionado para a corrente normal do circuito (não é só uma questão de sensibilidade
+// a fuga — o DR também conduz a corrente de carga o tempo todo).
+const DR_PADRAO = [25, 40, 63, 80, 100, 125, 160, 200, 250, 300, 400];
 
 // Tabela 40 — fator de correção de temperatura, isolação PVC.
 const FATOR_TEMPERATURA_AR = { 10: 1.22, 15: 1.17, 20: 1.12, 25: 1.06, 30: 1.0, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71, 55: 0.61, 60: 0.5 }; // referência: ar a 30°C
@@ -57,8 +78,12 @@ const FATOR_TEMPERATURA_SOLO = { 10: 1.1, 15: 1.05, 20: 1.0, 25: 0.95, 30: 0.89,
 const FATOR_AGRUPAMENTO_AR = { 1: 1.0, 2: 0.8, 3: 0.7, 4: 0.65, 5: 0.6, 6: 0.57, 7: 0.54, 8: 0.52, 9: 0.5 };
 const FATOR_AGRUPAMENTO_SOLO = { 1: 1.0, 2: 0.75, 3: 0.65, 4: 0.6, 5: 0.55, 6: 0.5, 7: 0.45, 8: 0.43, 9: 0.41 };
 
-const RESISTIVIDADE_COBRE = 0.0225; // Ω·mm²/m, cobre ~70°C (aprox. — referência para estimativa de queda de tensão)
-const FATOR_CONTINUIDADE = 1.25; // carga contínua (carregamento > 1h) — mesmo princípio do NBR IEC 61851/boas práticas de dimensionamento para EVSE
+// Margem para carga contínua (carregamento > 1h) — NÃO é um número fixado pela NBR 5410 em si
+// (a norma não trata de carregador veicular especificamente); é a mesma margem de 125% que a
+// NEC americana (625.41/210.19) exige explicitamente para circuitos de EVSE, e que fabricantes/
+// integradores costumam adotar por aqui também como boa prática. Por não ser uma exigência
+// obrigatória e numerada da NBR 5410, é editável no formulário (não fixo no código).
+const FATOR_CONTINUIDADE_PADRAO = 1.25;
 
 const ELETRODUTO_POR_SECAO = [
   { max: 2.5, label: '3/4" (20 mm)' },
@@ -99,9 +124,9 @@ export function calcularCorrenteCarregador({ potenciaKw, tensaoV, tipoLigacao, f
   return potenciaW / (tensaoV * fp); // monofásico (F+N) ou bifásico (F+F)
 }
 
-function quedaTensaoPercent({ correnteA, distanciaM, secaoMm2, tensaoV, tipoLigacao }) {
+function quedaTensaoPercent({ correnteA, distanciaM, secaoMm2, tensaoV, tipoLigacao, resistividade }) {
   const fatorCircuito = tipoLigacao === "trifasico" ? Math.sqrt(3) : 2; // 2 = ida e volta (mono/bifásico)
-  const quedaV = (fatorCircuito * RESISTIVIDADE_COBRE * distanciaM * correnteA) / secaoMm2;
+  const quedaV = (fatorCircuito * resistividade * distanciaM * correnteA) / secaoMm2;
   return (quedaV / tensaoV) * 100;
 }
 
@@ -129,14 +154,22 @@ function secaoTerra(secaoFaseMm2) {
  * @param {"B1"|"C"|"D"|"F"} p.metodoInstalacao
  * @param {number} p.temperaturaAmbiente - °C (ambiente do ar para B1/C/F, do solo para D)
  * @param {number} p.circuitosAgrupados - nº de circuitos no mesmo eletroduto/bandeja/vala (mín. 1)
+ * @param {number} [p.fatorContinuidade] - margem para carga contínua (padrão 1,25 — ver nota acima; não é um valor fixado pela NBR5410)
+ * @param {"cobre"|"aluminio"} [p.material] - material do condutor (padrão cobre)
  */
 export function calcularDimensionamentoEletrico(p) {
   const avisos = [];
   const tipoLigacao = p.tipoLigacao || "monofasico";
   const condutoresCarregados = tipoLigacao === "trifasico" ? 3 : 2;
   const metodo = p.metodoInstalacao || "B1";
-  const tabela = AMPACIDADE[metodo][condutoresCarregados];
+  const material = p.material === "aluminio" ? "aluminio" : "cobre";
+  const fatorMaterial = material === "aluminio" ? FATOR_AMPACIDADE_ALUMINIO : 1;
+  const resistividade = RESISTIVIDADE[material];
+  const secaoMinima = SECAO_MINIMA[material];
+  const tabelaBase = AMPACIDADE[metodo][condutoresCarregados];
+  const tabela = Object.fromEntries(Object.entries(tabelaBase).map(([secao, ampacidade]) => [secao, ampacidade * fatorMaterial]));
   const enterrado = METODOS_ENTERRADOS.has(metodo);
+  const fatorContinuidade = p.fatorContinuidade > 0 ? p.fatorContinuidade : FATOR_CONTINUIDADE_PADRAO;
 
   const correnteNominal = calcularCorrenteCarregador({
     potenciaKw: p.potenciaKw,
@@ -144,7 +177,7 @@ export function calcularDimensionamentoEletrico(p) {
     tipoLigacao,
     fatorPotencia: p.fatorPotencia,
   });
-  const correnteProjeto = correnteNominal * FATOR_CONTINUIDADE;
+  const correnteProjeto = correnteNominal * fatorContinuidade;
 
   const temperaturaRef = enterrado ? 20 : 30;
   const tabelaTemp = enterrado ? FATOR_TEMPERATURA_SOLO : FATOR_TEMPERATURA_AR;
@@ -160,9 +193,9 @@ export function calcularDimensionamentoEletrico(p) {
   let capacidadeCabo = 0;
   let quedaTensao = 0;
   for (const secao of SECOES_PADRAO) {
-    if (secao < 2.5) continue; // mínimo NBR5410 para circuitos de força
+    if (secao < secaoMinima) continue;
     const capacidade = tabela[secao] * fatorCorrecao;
-    const queda = quedaTensaoPercent({ correnteA: correnteProjeto, distanciaM: p.distanciaM || 0, secaoMm2: secao, tensaoV: p.tensaoV, tipoLigacao });
+    const queda = quedaTensaoPercent({ correnteA: correnteProjeto, distanciaM: p.distanciaM || 0, secaoMm2: secao, tensaoV: p.tensaoV, tipoLigacao, resistividade });
     if (capacidade >= correnteProjeto && queda <= quedaMax) {
       secaoEscolhida = secao;
       capacidadeCabo = capacidade;
@@ -177,7 +210,7 @@ export function calcularDimensionamentoEletrico(p) {
     const maior = SECOES_PADRAO[SECOES_PADRAO.length - 1];
     secaoEscolhida = maior;
     capacidadeCabo = tabela[maior] * fatorCorrecao;
-    quedaTensao = quedaTensaoPercent({ correnteA: correnteProjeto, distanciaM: p.distanciaM || 0, secaoMm2: maior, tensaoV: p.tensaoV, tipoLigacao });
+    quedaTensao = quedaTensaoPercent({ correnteA: correnteProjeto, distanciaM: p.distanciaM || 0, secaoMm2: maior, tensaoV: p.tensaoV, tipoLigacao, resistividade });
   }
 
   let disjuntor = DISJUNTORES_PADRAO.find((d) => d >= correnteProjeto) ?? null;
@@ -189,13 +222,13 @@ export function calcularDimensionamentoEletrico(p) {
       if (capacidade >= disjuntor) {
         secaoEscolhida = secao;
         capacidadeCabo = capacidade;
-        quedaTensao = quedaTensaoPercent({ correnteA: correnteProjeto, distanciaM: p.distanciaM || 0, secaoMm2: secao, tensaoV: p.tensaoV, tipoLigacao });
+        quedaTensao = quedaTensaoPercent({ correnteA: correnteProjeto, distanciaM: p.distanciaM || 0, secaoMm2: secao, tensaoV: p.tensaoV, tipoLigacao, resistividade });
         break;
       }
     }
   }
   if (!disjuntor) {
-    avisos.push("Corrente de projeto acima do maior disjuntor padrão desta tabela (250 A) — consulte um engenheiro eletricista.");
+    avisos.push(`Corrente de projeto acima do maior disjuntor padrão desta tabela (${DISJUNTORES_PADRAO[DISJUNTORES_PADRAO.length - 1]} A) — consulte um engenheiro eletricista.`);
     disjuntor = DISJUNTORES_PADRAO[DISJUNTORES_PADRAO.length - 1];
   }
 
@@ -204,12 +237,22 @@ export function calcularDimensionamentoEletrico(p) {
   const dpsUc = ucCandidatos.find((v) => v >= ucMinimo) ?? ucCandidatos[ucCandidatos.length - 1];
   const dpsImaxKa = p.potenciaKw > 22 ? 40 : 20;
 
-  const drNominal = DR_PADRAO.find((d) => d >= disjuntor) ?? DR_PADRAO[DR_PADRAO.length - 1];
+  // O DR precisa suportar pelo menos a corrente nominal do disjuntor que ele protege (ele
+  // conduz a corrente de carga o tempo todo, não só a de fuga) — nunca um valor abaixo disso.
+  let drNominal = DR_PADRAO.find((d) => d >= disjuntor) ?? null;
+  if (!drNominal) {
+    avisos.push(
+      `Disjuntor (${disjuntor} A) acima do maior DR de caixa moldada padrão desta tabela (${DR_PADRAO[DR_PADRAO.length - 1]} A) — nesse patamar normalmente se usa um relé de proteção diferencial com TC toroidal em vez de um DR compacto; consulte um engenheiro eletricista.`
+    );
+    drNominal = DR_PADRAO[DR_PADRAO.length - 1];
+  }
 
   return {
     tipoLigacao,
+    material,
     condutoresCarregados,
     correnteNominal,
+    fatorContinuidade,
     correnteProjeto,
     fatorTemp,
     fatorAgrup,
