@@ -1,5 +1,6 @@
 import { MESES, calcularDimensionamento, calcularAreaModulos, calcularModulosQueCabem, calcularCapex, calcularContaMes1, calcularPayback } from "../lib/dimensionamentoSolar.js";
 import { calcularBESS, calcularCenariosGrupoA } from "../lib/dimensionamentoBESS.js";
+import { calcularInvestimentoMigracao, calcularCenariosMigracao } from "../lib/migracaoGrupoA.js";
 import { gerarPropostaPdf } from "./pdfProposta.js";
 
 const $ = (id) => document.getElementById(id);
@@ -21,9 +22,12 @@ document.querySelectorAll(".grupo-btn").forEach((btn) => {
     if (btn.dataset.grupo === "B") {
       $("painel-solar").classList.remove("hidden");
       initSolar();
-    } else {
+    } else if (btn.dataset.grupo === "A") {
       $("painel-bess").classList.remove("hidden");
       initBess();
+    } else {
+      $("painel-migracao").classList.remove("hidden");
+      initMigracao();
     }
   });
 });
@@ -31,6 +35,7 @@ document.querySelectorAll(".voltar-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     $("painel-solar").classList.add("hidden");
     $("painel-bess").classList.add("hidden");
+    $("painel-migracao").classList.add("hidden");
     $("grupo-selector").classList.remove("hidden");
     $("simulacoes-salvas-wrap").classList.remove("hidden");
   });
@@ -96,11 +101,16 @@ async function carregarSimulacao(id, tipo) {
     initSolar();
     aplicarCamposPainel("painel-solar", row.dados);
     computeSolar();
-  } else {
+  } else if (tipo === "bess") {
     $("painel-bess").classList.remove("hidden");
     initBess();
     aplicarCamposPainel("painel-bess", row.dados);
     computeBess();
+  } else {
+    $("painel-migracao").classList.remove("hidden");
+    initMigracao();
+    aplicarCamposPainel("painel-migracao", row.dados);
+    computeMigracao();
   }
 }
 
@@ -129,7 +139,7 @@ async function carregarListaSimulacoes() {
         (r) => `
       <div class="flex items-center justify-between p-3 gap-3">
         <div class="min-w-0">
-          <span class="text-[10px] font-bold uppercase tracking-wide ${r.tipo === "solar" ? "text-maia-blue-dark" : "text-maia-orange-dark"}">${r.tipo === "solar" ? "Grupo B · Solar" : "Grupo A · BESS"}</span>
+          <span class="text-[10px] font-bold uppercase tracking-wide ${r.tipo === "solar" ? "text-maia-blue-dark" : r.tipo === "bess" ? "text-maia-orange-dark" : "text-maia-green"}">${r.tipo === "solar" ? "Grupo B · Solar" : r.tipo === "bess" ? "Grupo A · BESS" : "Grupo B → A · Migração"}</span>
           <p class="font-semibold text-maia-navy truncate">${r.cliente || "(sem nome)"}</p>
           <p class="text-[11px] text-slate-400">${new Date(r.criado_em).toLocaleString("pt-BR")}</p>
         </div>
@@ -706,5 +716,158 @@ async function exportarPdfBess() {
     notaRodape:
       "Estimativas baseadas em dados informados pelo cliente. A efetividade do BESS em cobrir a energia de ponta decai ao longo da vida útil da bateria, conforme premissa técnica do fabricante. O crédito tributário sobre a mensalidade EaaS (Lucro Real) é uma estimativa e depende do enquadramento fiscal real do cliente — consulte a contabilidade dele antes de apresentar como garantido. Não substitui análise técnica detalhada.",
     fileName: `proposta-bess-${(cliente || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`,
+  });
+}
+
+// ============================================================
+// MIGRAÇÃO GRUPO B → GRUPO A (aumento de carga + Mercado Livre)
+// ============================================================
+let migracaoInited = false;
+let chartMigracao;
+let ultimoResultadoMigracao = null;
+
+function initMigracao() {
+  if (migracaoInited) return;
+  migracaoInited = true;
+
+  $("m-proposta-codigo").value = gerarCodigoProposta("MIG");
+
+  $("m-usar-ml").addEventListener("change", () => {
+    $("m-ml-fields").classList.toggle("hidden", !$("m-usar-ml").checked);
+    computeMigracao();
+  });
+
+  document.querySelectorAll("#painel-migracao input, #painel-migracao select").forEach((el) => {
+    el.addEventListener("input", computeMigracao);
+  });
+
+  $("m-export-pdf").addEventListener("click", exportarPdfMigracao);
+  $("m-salvar").addEventListener("click", () => salvarSimulacao("migracao", "painel-migracao", "m-cliente", "m-salvar-status"));
+
+  computeMigracao();
+}
+
+function computeMigracao() {
+  const consumoAtualKwh = Number($("m-consumo-atual").value) || 0;
+  if (consumoAtualKwh === 0) return;
+
+  const investimento = calcularInvestimentoMigracao({
+    transformador: Number($("m-transformador").value) || 0,
+    obraCivil: Number($("m-obra-civil").value) || 0,
+    projetoArt: Number($("m-projeto-art").value) || 0,
+    medicaoProtecao: Number($("m-medicao-protecao").value) || 0,
+    taxaDistribuidora: Number($("m-taxa-distribuidora").value) || 0,
+    outros: Number($("m-investimento-outros").value) || 0,
+  });
+  $("m-out-investimento").textContent = brl(investimento.total);
+
+  const cenarios = calcularCenariosMigracao({
+    consumoAtualKwh,
+    tarifaGrupoBAtual: Number($("m-tarifa-grupob").value) || 0,
+    energiaPontaKwhProjetado: Number($("m-energia-ponta").value) || 0,
+    energiaForaPontaKwhProjetado: Number($("m-energia-fora-ponta").value) || 0,
+    demandaContratadaKw: Number($("m-demanda").value) || 0,
+    tarifaPonta: Number($("m-tarifa-ponta").value) || 0,
+    tarifaForaPonta: Number($("m-tarifa-fora-ponta").value) || 0,
+    tarifaDemanda: Number($("m-tarifa-demanda").value) || 0,
+    reativoExcedente: Number($("m-reativo").value) || 0,
+    iluminacaoPublica: Number($("m-iluminacao").value) || 0,
+    outros: Number($("m-outros").value) || 0,
+    usarMercadoLivre: $("m-usar-ml").checked,
+    tarifaMercadoLivre: Number($("m-tarifa-ml").value) || null,
+    tarifaTusd: Number($("m-tarifa-tusd").value) || 0,
+    investimentoMigracao: investimento.total,
+    horizonteAnos: Number($("m-horizonte").value) || 10,
+    reajusteTarifario: Number($("m-reajuste").value) / 100,
+  });
+
+  ultimoResultadoMigracao = { investimento, cenarios };
+
+  const l1 = cenarios.linhas[0];
+  const favoravel = l1.economiaMensal >= 0;
+  $("m-result-cards").innerHTML = `
+    ${cardHtml("Conta atual (Grupo B hoje)", brl2(cenarios.contaAtualGrupoB.total))}
+    ${cardHtml("Grupo B projetado (mesmo consumo)", brl2(l1.contaGrupoBProjetada))}
+    ${cardHtml(`Grupo A projetado${cenarios.usarMercadoLivre ? " + ML" : ""}`, brl2(l1.contaGrupoAProjetada))}
+    ${cardHtml(favoravel ? "Economia mensal com a migração" : "Custo extra mensal da migração", brl2(Math.abs(l1.economiaMensal)))}
+  `;
+
+  renderChartMigracao(cenarios.linhas, cenarios.usarMercadoLivre);
+}
+
+function renderChartMigracao(linhas, usouMercadoLivre) {
+  const ctx = $("m-chart-conta");
+  const heading = ctx.closest(".rounded-xl")?.querySelector("h2");
+  if (heading) heading.textContent = `Conta mensal — Grupo B vs. Grupo A${usouMercadoLivre ? " + Mercado Livre" : ""} (mesmo consumo projetado)`;
+  if (chartMigracao) chartMigracao.destroy();
+  chartMigracao = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: linhas.map((l) => `Ano ${l.anoRelativo}`),
+      datasets: [
+        { label: "Conta como Grupo B", data: linhas.map((l) => l.contaGrupoBProjetada), borderColor: "#e08e0b", tension: 0.15 },
+        { label: `Conta como Grupo A${usouMercadoLivre ? " + Mercado Livre" : ""}`, data: linhas.map((l) => l.contaGrupoAProjetada), borderColor: "#1c75bc", tension: 0.15 },
+      ],
+    },
+    options: { responsive: true },
+  });
+}
+
+async function exportarPdfMigracao() {
+  if (!ultimoResultadoMigracao) return;
+  const { investimento, cenarios } = ultimoResultadoMigracao;
+  const cliente = $("m-cliente").value || "Cliente";
+  const mlSufixo = cenarios.usarMercadoLivre ? " + Mercado Livre" : "";
+  const l1 = cenarios.linhas[0];
+
+  const diagnostico = [
+    `Consumo atual (Grupo B, baixa tensão): ${num(Number($("m-consumo-atual").value), 0)} kWh/mês, sem demanda contratada.`,
+    `Com o aumento de carga projetado, o consumo passa a ${num(cenarios.consumoProjetadoTotal, 0)} kWh/mês (${num(Number($("m-energia-ponta").value), 0)} kWh na ponta + ${num(Number($("m-energia-fora-ponta").value), 0)} kWh fora ponta) e demanda de ${num(Number($("m-demanda").value), 0)} kW — acima do que a ligação em baixa tensão comporta com bom custo-benefício.`,
+    cenarios.usarMercadoLivre
+      ? "Cenário já considera a migração para o Mercado Livre de Energia junto com a mudança de grupo tarifário."
+      : "Cenário calculado no mercado regulado (ACR); o Mercado Livre pode ampliar a economia (ver observações).",
+  ];
+
+  const escopo = [
+    `Migração da unidade consumidora de Grupo B para Grupo A (alta tensão), com nova demanda contratada de ${num(Number($("m-demanda").value), 0)} kW.`,
+    "Construção de subestação/cabine primária própria: transformador, obra civil, projeto elétrico/ART, medição e proteção, e conexão junto à distribuidora.",
+    `Comparação de tarifas no mesmo nível de consumo projetado: Grupo B ficaria em ${brl2(l1.contaGrupoBProjetada)}/mês, Grupo A${mlSufixo} em ${brl2(l1.contaGrupoAProjetada)}/mês.`,
+  ];
+
+  const tabelaFinanceira = [
+    ["Conta atual (Grupo B, consumo de hoje)", brl2(cenarios.contaAtualGrupoB.total)],
+    ["Conta Grupo B no consumo projetado (referência)", brl2(l1.contaGrupoBProjetada)],
+    [`Conta Grupo A no consumo projetado${mlSufixo}`, brl2(l1.contaGrupoAProjetada)],
+    [l1.economiaMensal >= 0 ? "Economia mensal com a migração" : "Custo extra mensal da migração", brl2(Math.abs(l1.economiaMensal))],
+    [`Resultado total (${cenarios.linhas.length} anos)`, brl(cenarios.economiaTotalHorizonte)],
+    ["Investimento de conexão (subestação)", brl(investimento.total)],
+    ["Payback do investimento de conexão", cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—"],
+  ];
+
+  await gerarPropostaPdf({
+    subtitulo: `Migração Grupo B → Grupo A${mlSufixo}`,
+    codigoProposta: $("m-proposta-codigo").value || "—",
+    cliente,
+    responsavelNome: $("m-responsavel-nome").value,
+    responsavelCargo: $("m-responsavel-cargo").value,
+    email: $("m-email").value,
+    resumoExecutivo: `Esta proposta avalia a migração de ${cliente} do Grupo B para o Grupo A diante do aumento de carga projetado, comparando o custo de energia nos dois grupos tarifários no mesmo nível de consumo e o retorno do investimento de conexão necessário.`,
+    diagnostico,
+    escopo,
+    tabelaFinanceira,
+    graficoCanvas: $("m-chart-conta"),
+    investimentoTotal: investimento.total,
+    formaPagamento: $("m-forma-pagamento").value,
+    prazoExecucaoDias: $("m-prazo-execucao").value || "—",
+    validadeDias: $("m-validade-proposta").value || "—",
+    cronograma: [
+      "Etapa 1: projeto elétrico da subestação, ART e solicitação de acesso junto à distribuidora.",
+      "Etapa 2: fornecimento e instalação do transformador e obra civil da cabine primária.",
+      "Etapa 3: montagem da medição e proteção, vistoria e energização pela distribuidora.",
+      "Etapa 4: acompanhamento da primeira fatura como Grupo A e ajuste fino da demanda contratada.",
+    ],
+    notaRodape:
+      "Comparação construída a partir das regras gerais de tarifação Grupo B/Grupo A e Mercado Livre — não há uma planilha de referência específica para este cenário; os valores de tarifa e investimento devem ser ajustados caso a caso com a distribuidora local e um orçamento de engenharia. Não substitui análise técnica detalhada nem estudo de acesso junto à distribuidora.",
+    fileName: `proposta-migracao-${(cliente || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`,
   });
 }

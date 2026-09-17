@@ -11,7 +11,7 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
     </div>
 
     <!-- Etapa 0: seleção do grupo tarifário -->
-    <div id="grupo-selector" class="grid sm:grid-cols-2 gap-4 mb-8">
+    <div id="grupo-selector" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
       <button type="button" data-grupo="B" class="grupo-btn text-left rounded-2xl bg-white border-2 border-slate-200 p-6 hover:border-maia-blue transition-colors">
         <p class="text-xs font-bold uppercase tracking-wide text-maia-blue-dark">Grupo B</p>
         <h2 class="mt-1 font-bold text-maia-navy text-lg">Baixa tensão — Dimensionamento Solar</h2>
@@ -21,6 +21,11 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         <p class="text-xs font-bold uppercase tracking-wide text-maia-blue-dark">Grupo A</p>
         <h2 class="mt-1 font-bold text-maia-navy text-lg">Alta tensão — Eficiência + BESS</h2>
         <p class="mt-2 text-sm text-slate-500">Indústrias e grandes comércios com demanda contratada. Dimensiona banco de baterias (peak shaving), compara cenários com Mercado Livre e calcula payback / EaaS.</p>
+      </button>
+      <button type="button" data-grupo="Migracao" class="grupo-btn text-left rounded-2xl bg-white border-2 border-slate-200 p-6 hover:border-maia-blue transition-colors">
+        <p class="text-xs font-bold uppercase tracking-wide text-maia-blue-dark">Grupo B → Grupo A</p>
+        <h2 class="mt-1 font-bold text-maia-navy text-lg">Migração por aumento de carga + ML</h2>
+        <p class="mt-2 text-sm text-slate-500">Cliente Grupo B com carga crescendo: compara a conta como Grupo B vs Grupo A (com Mercado Livre opcional) no mesmo consumo projetado, e o payback do investimento de conexão (subestação).</p>
       </button>
     </div>
 
@@ -347,6 +352,115 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         <button type="button" id="b-export-pdf" class="rounded-lg bg-maia-orange hover:bg-maia-orange-dark text-white font-semibold px-5 py-2.5 text-sm transition-colors">Exportar proposta em PDF</button>
         <button type="button" id="b-salvar" class="rounded-lg bg-white border border-maia-navy/30 hover:bg-slate-50 text-maia-navy font-semibold px-5 py-2.5 text-sm transition-colors">Salvar simulação</button>
         <span id="b-salvar-status" class="text-xs text-slate-400"></span>
+      </div>
+    </div>
+
+    <!-- ============ MIGRAÇÃO GRUPO B → GRUPO A ============ -->
+    <div id="painel-migracao" class="hidden">
+      <button type="button" class="voltar-btn text-xs font-semibold text-maia-blue-dark mb-4">← Trocar grupo tarifário</button>
+
+      <div class="grid lg:grid-cols-2 gap-6 mb-6">
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Cliente</h2>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div class="col-span-2"><label class="block text-xs font-semibold text-slate-500 mb-1">Nome do cliente</label><input id="m-cliente" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2" /></div>
+          </div>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Situação atual (Grupo B)</h2>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Consumo atual (kWh/mês)</label><input id="m-consumo-atual" type="number" value="8000" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa Grupo B (R$/kWh)</label><input id="m-tarifa-grupob" type="number" step="0.0001" value="0.85" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-2">Usada só como referência (conta de hoje) — a comparação abaixo é feita no consumo projetado pós-aumento de carga.</p>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-6 mb-6">
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Consumo e demanda projetados (pós-aumento de carga)</h2>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Energia ponta (kWh/mês)</label><input id="m-energia-ponta" type="number" value="1500" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Energia fora ponta (kWh/mês)</label><input id="m-energia-fora-ponta" type="number" value="13500" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Nova demanda contratada (kW)</label><input id="m-demanda" type="number" value="100" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Reativo excedente (R$/mês)</label><input id="m-reativo" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Iluminação púb. (R$/mês)</label><input id="m-iluminacao" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Outros (R$/mês)</label><input id="m-outros" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          </div>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Tarifas Grupo A</h2>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa ponta (R$/kWh)</label><input id="m-tarifa-ponta" type="number" step="0.0001" value="3.04" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa fora ponta (R$/kWh)</label><input id="m-tarifa-fora-ponta" type="number" step="0.0001" value="0.62" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div class="col-span-2"><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa demanda (R$/kW)</label><input id="m-tarifa-demanda" type="number" step="0.01" value="30.07" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          </div>
+          <label class="flex items-center gap-2 mt-3 text-sm">
+            <input id="m-usar-ml" type="checkbox" class="h-4 w-4" />
+            <span class="font-semibold text-slate-600">Considerar migração já com Mercado Livre</span>
+          </label>
+          <div id="m-ml-fields" class="mt-2 hidden grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa Mercado Livre — só energia/TE (R$/kWh)</label>
+              <input id="m-tarifa-ml" type="number" step="0.0001" value="0.29" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">TUSD (R$/kWh) — continua devido à distribuidora</label>
+              <input id="m-tarifa-tusd" type="number" step="0.0001" value="0.35" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-6 mb-6">
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Investimento de conexão (subestação)</h2>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Transformador (R$)</label><input id="m-transformador" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Obra civil (R$)</label><input id="m-obra-civil" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Projeto/ART (R$)</label><input id="m-projeto-art" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Medição/proteção (R$)</label><input id="m-medicao-protecao" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Taxa distribuidora (R$)</label><input id="m-taxa-distribuidora" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Outros (R$)</label><input id="m-investimento-outros" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          </div>
+          <div class="flex justify-between text-sm bg-slate-50 rounded-lg px-3 py-2 mt-3">
+            <span class="text-slate-500">Investimento total de migração</span>
+            <span id="m-out-investimento" class="font-semibold text-maia-navy">—</span>
+          </div>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Financeiro</h2>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Horizonte (anos)</label><input id="m-horizonte" type="number" value="10" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Reajuste tarifário (%a.a.)</label><input id="m-reajuste" type="number" step="0.1" value="8" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m-result-cards" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6"></div>
+
+      <div class="rounded-xl bg-white border border-slate-200 p-5 mb-6">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Conta mensal — Grupo B vs. Grupo A (mesmo consumo projetado)</h2>
+        <canvas id="m-chart-conta" height="80"></canvas>
+      </div>
+
+      <div class="rounded-xl bg-white border border-slate-200 p-5 mb-6">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Dados da proposta</h2>
+        <div class="grid sm:grid-cols-3 gap-3 text-sm">
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Código da proposta</label><input id="m-proposta-codigo" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">A/C (responsável no cliente)</label><input id="m-responsavel-nome" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Cargo</label><input id="m-responsavel-cargo" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">E-mail do cliente</label><input id="m-email" type="email" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Forma de pagamento</label><input id="m-forma-pagamento" type="text" value="40% de sinal, 30% na entrega dos materiais e 30% na entrega técnica" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Prazo de execução (dias úteis)</label><input id="m-prazo-execucao" type="number" value="30" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Validade da proposta (dias)</label><input id="m-validade-proposta" type="number" value="10" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="button" id="m-export-pdf" class="rounded-lg bg-maia-orange hover:bg-maia-orange-dark text-white font-semibold px-5 py-2.5 text-sm transition-colors">Exportar proposta em PDF</button>
+        <button type="button" id="m-salvar" class="rounded-lg bg-white border border-maia-navy/30 hover:bg-slate-50 text-maia-navy font-semibold px-5 py-2.5 text-sm transition-colors">Salvar simulação</button>
+        <span id="m-salvar-status" class="text-xs text-slate-400"></span>
       </div>
     </div>
   </div>
