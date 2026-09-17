@@ -323,17 +323,39 @@ function computeSolar() {
     moduloWp: Number($("s-modulo-wp").value) || 650,
     moduloAreaM2: Number($("s-modulo-area").value) || 3.055,
   };
-  let area = calcularAreaModulos(dim.potenciaEscolhidaKwp, moduloParams);
   const tipoInstalacao = $("s-tipo-instalacao").value;
   const areaDisponivel = Number($("s-area-disponivel").value) || 0;
+  const potenciaTravada = $("s-potencia-travada").value === "" ? null : Number($("s-potencia-travada").value);
   let limitadoPorArea = false;
   const potenciaDesejadaKwp = dim.potenciaEscolhidaKwp;
+
+  // "Potência travada": o usuário já sabe o kWp real (projeto pronto, layout medido em
+  // campo, etc.) e quer que TUDO — inclusive a checagem de área — use esse valor direto,
+  // sem a sugestão por consumo nem o ajuste automático por área tentando decidir por ele.
+  if (potenciaTravada != null) {
+    dim = calcularDimensionamento({
+      consumoMensal,
+      rede,
+      irradiacaoMensal,
+      perdas,
+      perdasAdicionais,
+      potenciaEscolhidaKwp: potenciaTravada,
+    });
+  }
+
+  let area = calcularAreaModulos(dim.potenciaEscolhidaKwp, moduloParams);
 
   if (areaDisponivel > 0) {
     const areaNecessariaEscolhida = tipoInstalacao === "solo" ? area.areaNecessariaSolo : area.areaNecessariaTelhado;
     const cabe = areaDisponivel >= areaNecessariaEscolhida;
     if (cabe) {
       $("s-area-comparacao").innerHTML = `<span class="text-emerald-600 font-semibold">✓ Cabe</span> — sobram ${num(areaDisponivel - areaNecessariaEscolhida, 0)} m² de folga.`;
+    } else if (potenciaTravada != null) {
+      // Potência travada não cabe na área informada — avisa, mas respeita a escolha do
+      // usuário em vez de reduzir a potência automaticamente.
+      $("s-area-comparacao").innerHTML =
+        `<span class="text-red-600 font-semibold">✗ Não cabe</span> — faltam ${num(areaNecessariaEscolhida - areaDisponivel, 0)} m² (considerando ${tipoInstalacao}) para os ${num(potenciaTravada, 2)} kWp travados. ` +
+        `<strong>Mantendo a potência travada mesmo assim — os cálculos abaixo usam ${num(potenciaTravada, 2)} kWp.</strong>`;
     } else {
       const possivel = calcularModulosQueCabem(areaDisponivel, tipoInstalacao, moduloParams);
       limitadoPorArea = true;
@@ -393,10 +415,11 @@ function computeSolar() {
     tma: Number($("s-tma").value) / 100,
   });
 
-  ultimoResultadoSolar = { dim, area, tipoInstalacao, limitadoPorArea, potenciaDesejadaKwp, capex, tarifas, conta, payback, anoInicial };
+  ultimoResultadoSolar = { dim, area, tipoInstalacao, limitadoPorArea, potenciaTravada, potenciaDesejadaKwp, capex, tarifas, conta, payback, anoInicial };
 
+  const potenciaLabel = potenciaTravada != null ? "Potência travada (manual)" : limitadoPorArea ? "Potência real (limitada pela área)" : "Potência escolhida";
   $("s-result-cards").innerHTML = `
-    ${cardHtml(limitadoPorArea ? "Potência real (limitada pela área)" : "Potência escolhida", `${num(dim.potenciaEscolhidaKwp, 2)} kWp`)}
+    ${cardHtml(potenciaLabel, `${num(dim.potenciaEscolhidaKwp, 2)} kWp`)}
     ${cardHtml("Geração média mensal", `${num(dim.geracaoMedia, 0)} kWh`)}
     ${cardHtml("Autonomia do sistema", pct(dim.autonomiaPercent))}
     ${cardHtml("Valor final do sistema", brl(capex.valorFinalCliente))}
