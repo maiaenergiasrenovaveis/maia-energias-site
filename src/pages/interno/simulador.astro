@@ -227,9 +227,15 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
             <input id="b-usar-ml" type="checkbox" class="h-4 w-4" />
             <span class="font-semibold text-slate-600">Considerar migração para Mercado Livre</span>
           </label>
-          <div id="b-ml-fields" class="mt-2 hidden">
-            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa Mercado Livre (R$/kWh)</label>
-            <input id="b-tarifa-ml" type="number" step="0.0001" value="0.25" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+          <div id="b-ml-fields" class="mt-2 hidden grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa Mercado Livre — só energia/TE (R$/kWh)</label>
+              <input id="b-tarifa-ml" type="number" step="0.0001" value="0.25" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">TUSD (R$/kWh) — continua devido à distribuidora</label>
+              <input id="b-tarifa-tusd" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+            </div>
           </div>
         </div>
 

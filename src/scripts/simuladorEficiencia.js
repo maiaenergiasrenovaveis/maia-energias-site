@@ -492,6 +492,7 @@ function computeBess() {
     outros: Number($("b-outros").value) || 0,
     usarMercadoLivre: $("b-usar-ml").checked,
     tarifaMercadoLivre: Number($("b-tarifa-ml").value) || null,
+    tarifaTusd: Number($("b-tarifa-tusd").value) || 0,
     modoAquisicao,
     investimentoBess: Number($("b-investimento").value) || 0,
     mensalidadeEaasInicial: Number($("b-mensalidade").value) || 0,
@@ -562,7 +563,9 @@ async function exportarPdfBess() {
   const escopo = [
     `Instalação de banco de baterias (BESS) de ${num(bess.potenciaRecomendadaKw, 1)} kW / ${num(bess.capacidadeFinalKwh, 1)} kWh para deslocamento de carga na ponta (peak shaving).`,
     `Redução da demanda contratada de ${num(Number($("b-demanda").value), 0)} kW para ${num(Number($("b-demanda-pos").value), 0)} kW.`,
-    cenarios.usarMercadoLivre ? `Migração para o Mercado Livre de Energia, com tarifa estimada de R$ ${num(Number($("b-tarifa-ml").value), 4)}/kWh.` : null,
+    cenarios.usarMercadoLivre
+      ? `Migração para o Mercado Livre de Energia, com energia estimada em R$ ${num(Number($("b-tarifa-ml").value), 4)}/kWh + TUSD de R$ ${num(Number($("b-tarifa-tusd").value), 4)}/kWh (continua devido à distribuidora local).`
+      : null,
     modoAquisicao === "eaas"
       ? "Modelo de assinatura (Energy as a Service) — sem investimento inicial, com mensalidade reajustada anualmente pelo IPCA."
       : "Aquisição do sistema via investimento direto (CAPEX), com propriedade do ativo pelo cliente.",
