@@ -517,7 +517,7 @@ function computeSolar() {
     tma: Number($("s-tma").value) / 100,
   });
 
-  ultimoResultadoSolar = { dim, area, tipoInstalacao, limitadoPorArea, potenciaTravada, potenciaDesejadaKwp, capex, tarifas, conta, payback, anoInicial };
+  ultimoResultadoSolar = { dim, area, tipoInstalacao, limitadoPorArea, potenciaTravada, potenciaDesejadaKwp, capex, tarifas, conta, payback, anoInicial, consumoMensal, irradiacaoMensal };
 
   const potenciaLabel = potenciaTravada != null ? "Potência travada (manual)" : limitadoPorArea ? "Potência real (limitada pela área)" : "Potência escolhida";
   $("s-result-cards").innerHTML = `
@@ -549,11 +549,15 @@ function computeSolar() {
   renderTabelaSazonal(mesesRotacionados, irradiacaoMensal, dim.geracaoMensal, consumoMensal);
 }
 
-function renderTabelaSazonal(meses, irradiacaoMensal, geracaoMensal, consumoMensal) {
-  const linhas = meses.map((mes, i) => {
+function calcularLinhasSazonais(meses, irradiacaoMensal, geracaoMensal, consumoMensal) {
+  return meses.map((mes, i) => {
     const saldo = geracaoMensal[i] - consumoMensal[i];
     return { mes, irr: irradiacaoMensal[i], geracao: geracaoMensal[i], consumo: consumoMensal[i], saldo };
   });
+}
+
+function renderTabelaSazonal(meses, irradiacaoMensal, geracaoMensal, consumoMensal) {
+  const linhas = calcularLinhasSazonais(meses, irradiacaoMensal, geracaoMensal, consumoMensal);
   const somaGeracao = linhas.reduce((a, l) => a + l.geracao, 0);
   const somaConsumo = linhas.reduce((a, l) => a + l.consumo, 0);
   const irrMedia = linhas.reduce((a, l) => a + l.irr, 0) / linhas.length;
@@ -623,7 +627,7 @@ function renderChartPayback(linhas) {
 
 async function exportarPdfSolar() {
   if (!ultimoResultadoSolar) return;
-  const { dim, area, tipoInstalacao, limitadoPorArea, potenciaDesejadaKwp, capex, conta, payback } = ultimoResultadoSolar;
+  const { dim, area, tipoInstalacao, limitadoPorArea, potenciaDesejadaKwp, capex, conta, payback, consumoMensal, irradiacaoMensal } = ultimoResultadoSolar;
   const cliente = $("s-cliente").value || "Cliente";
   const cidade = $("s-cidade").value || "";
   const rede = $("s-rede").value;
@@ -655,6 +659,15 @@ async function exportarPdfSolar() {
     ["Tempo de retorno (payback simples)", `${num(payback.paybackSimples, 1)} anos`],
   ];
 
+  const linhasSazonais = calcularLinhasSazonais(mesesRotacionados, irradiacaoMensal, dim.geracaoMensal, consumoMensal);
+  const tabelaSazonalPdf = linhasSazonais.map((l) => [
+    l.mes,
+    num(l.irr, 4),
+    `${num(l.consumo, 0)} kWh`,
+    `${num(l.geracao, 0)} kWh`,
+    `${l.saldo >= 0 ? "+" : ""}${num(l.saldo, 0)} kWh (${l.saldo >= 0 ? "crédito" : "usa crédito"})`,
+  ]);
+
   await gerarPropostaPdf({
     subtitulo: "Projeto de Energia Solar Fotovoltaica",
     codigoProposta: $("s-proposta-codigo").value || "—",
@@ -667,6 +680,12 @@ async function exportarPdfSolar() {
     escopo,
     tabelaFinanceira,
     graficoCanvas: $("s-chart-payback"),
+    graficoSecundario: $("s-chart-geracao"),
+    tabelaSecundaria: {
+      titulo: "Comportamento sazonal da geração — a irradiação varia ao longo do ano, então a geração mensal não é fixa; o saldo é compensado pelo sistema de créditos da Lei 14.300:",
+      head: ["Mês", "Irradiação (kWh/m².dia)", "Consumo", "Geração estimada", "Saldo do mês"],
+      body: tabelaSazonalPdf,
+    },
     investimentoTotal: capex.valorFinalCliente,
     formaPagamento: $("s-forma-pagamento").value,
     prazoExecucaoDias: $("s-prazo-execucao").value || "—",

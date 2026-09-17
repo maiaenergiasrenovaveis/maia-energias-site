@@ -199,6 +199,8 @@ function desenharRodapes(doc) {
  * @param {string[]} opts.escopo
  * @param {[string,string][]} opts.tabelaFinanceira
  * @param {HTMLCanvasElement|null} opts.graficoCanvas
+ * @param {HTMLCanvasElement|null} [opts.graficoSecundario] - segundo gráfico opcional, exibido logo após o principal
+ * @param {{titulo: string, head: string[], body: (string|number)[][]}} [opts.tabelaSecundaria] - tabela opcional adicional na seção 4 (ex.: detalhamento mês a mês)
  * @param {number} opts.investimentoTotal
  * @param {string} opts.formaPagamento
  * @param {number} opts.prazoExecucaoDias
@@ -250,6 +252,11 @@ export async function gerarPropostaPdf(opts) {
   b.titulo("4. Estimativa de Redução e Payback");
   b.tabela(["Indicador financeiro", "Valor estimado"], opts.tabelaFinanceira);
   b.imagemGrafico(opts.graficoCanvas);
+  if (opts.graficoSecundario) b.imagemGrafico(opts.graficoSecundario, 60);
+  if (opts.tabelaSecundaria) {
+    b.paragrafo(opts.tabelaSecundaria.titulo);
+    b.tabela(opts.tabelaSecundaria.head, opts.tabelaSecundaria.body);
+  }
 
   b.titulo("5. Investimento e Condições Comerciais");
   b.tabela(
