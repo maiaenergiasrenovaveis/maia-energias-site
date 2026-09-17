@@ -546,6 +546,40 @@ function computeSolar() {
 
   renderChartGeracao(dim.geracaoMensal);
   renderChartPayback(payback.linhas);
+  renderTabelaSazonal(mesesRotacionados, irradiacaoMensal, dim.geracaoMensal, consumoMensal);
+}
+
+function renderTabelaSazonal(meses, irradiacaoMensal, geracaoMensal, consumoMensal) {
+  const linhas = meses.map((mes, i) => {
+    const saldo = geracaoMensal[i] - consumoMensal[i];
+    return { mes, irr: irradiacaoMensal[i], geracao: geracaoMensal[i], consumo: consumoMensal[i], saldo };
+  });
+  const somaGeracao = linhas.reduce((a, l) => a + l.geracao, 0);
+  const somaConsumo = linhas.reduce((a, l) => a + l.consumo, 0);
+  const irrMedia = linhas.reduce((a, l) => a + l.irr, 0) / linhas.length;
+
+  $("s-sazonal-tabela").innerHTML =
+    linhas
+      .map(
+        (l) => `
+      <tr class="border-b border-slate-100">
+        <td class="py-1.5 pr-2 font-semibold text-maia-navy">${l.mes}</td>
+        <td class="py-1.5 px-2 text-right text-slate-500">${num(l.irr, 4)}</td>
+        <td class="py-1.5 px-2 text-right text-slate-500">${num(l.consumo, 0)}</td>
+        <td class="py-1.5 px-2 text-right text-slate-500">${num(l.geracao, 0)}</td>
+        <td class="py-1.5 pl-2 text-right font-semibold ${l.saldo >= 0 ? "text-emerald-600" : "text-amber-600"}">
+          ${l.saldo >= 0 ? "+" : ""}${num(l.saldo, 0)} <span class="font-normal text-[10px]">(${l.saldo >= 0 ? "crédito" : "usa crédito"})</span>
+        </td>
+      </tr>`
+      )
+      .join("") +
+    `<tr class="font-semibold text-maia-navy">
+      <td class="py-2 pr-2">Total / Média</td>
+      <td class="py-2 px-2 text-right">${num(irrMedia, 4)}</td>
+      <td class="py-2 px-2 text-right">${num(somaConsumo, 0)}</td>
+      <td class="py-2 px-2 text-right">${num(somaGeracao, 0)} <span class="font-normal text-[10px] text-slate-400">(${num(somaGeracao / 12, 0)}/mês)</span></td>
+      <td class="py-2 pl-2 text-right">${num(somaGeracao - somaConsumo, 0)}</td>
+    </tr>`;
 }
 
 function cardHtml(label, value) {

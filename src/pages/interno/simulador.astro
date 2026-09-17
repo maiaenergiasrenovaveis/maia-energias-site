@@ -208,6 +208,25 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         <canvas id="s-chart-geracao" height="80"></canvas>
       </div>
 
+      <div class="rounded-xl bg-white border border-slate-200 p-5 mb-6">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Comportamento sazonal da geração</h2>
+        <p class="text-xs text-slate-500 mb-3">A irradiação varia ao longo do ano, então a geração mensal não é fixa — pelo sistema de compensação de créditos (Lei 14.300), os meses com sobra de geração creditam kWh para cobrir os meses de déficit.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-200">
+                <th class="py-2 pr-2">Mês</th>
+                <th class="py-2 px-2 text-right">Irradiação (kWh/m².dia)</th>
+                <th class="py-2 px-2 text-right">Consumo (kWh)</th>
+                <th class="py-2 px-2 text-right">Geração estimada (kWh)</th>
+                <th class="py-2 pl-2 text-right">Saldo do mês (kWh)</th>
+              </tr>
+            </thead>
+            <tbody id="s-sazonal-tabela"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="grid lg:grid-cols-2 gap-6 mb-6">
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Conta de energia (mês 1)</h2>
