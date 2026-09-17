@@ -914,6 +914,38 @@ function initMigracao() {
     el.addEventListener("input", computeMigracao);
   });
 
+  carregarDistribuidorasAneel("lista-distribuidoras-aneel-m");
+  const camposAneelMigracao = {
+    distribuidoraId: "m-aneel-distribuidora",
+    subgrupoId: "m-aneel-subgrupo",
+    modalidadeId: "m-aneel-modalidade",
+    statusId: "m-aneel-status",
+    ufId: "m-aneel-uf",
+    icmsId: "m-aneel-icms",
+    pisCofinsId: "m-aneel-piscofins",
+    tarifaPontaId: "m-tarifa-ponta",
+    tarifaForaPontaId: "m-tarifa-fora-ponta",
+    tarifaDemandaId: "m-tarifa-demanda",
+    tarifaTusdId: "m-tarifa-tusd",
+  };
+  ["m-aneel-distribuidora", "m-aneel-subgrupo", "m-aneel-modalidade"].forEach((id) => {
+    $(id).addEventListener("change", () => buscarTarifaAneel({ ...camposAneelMigracao, onDone: computeMigracao }));
+  });
+  $("m-aneel-uf").addEventListener("change", () => {
+    if (!$("m-aneel-icms").dataset.touched) {
+      $("m-aneel-icms").value = ICMS_REFERENCIA_POR_UF[$("m-aneel-uf").value] ?? "";
+    }
+    aplicarImpostoTarifaAneel(camposAneelMigracao);
+    computeMigracao();
+  });
+  ["m-aneel-icms", "m-aneel-piscofins"].forEach((id) => {
+    $(id).addEventListener("input", () => {
+      $(id).dataset.touched = "1";
+      aplicarImpostoTarifaAneel(camposAneelMigracao);
+      computeMigracao();
+    });
+  });
+
   $("m-export-pdf").addEventListener("click", exportarPdfMigracao);
   $("m-salvar").addEventListener("click", () => salvarSimulacao("migracao", "painel-migracao", "m-cliente", "m-salvar-status"));
 

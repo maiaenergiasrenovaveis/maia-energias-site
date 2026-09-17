@@ -446,6 +446,58 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         </div>
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Tarifas Grupo A</h2>
+          <div class="rounded-lg bg-slate-50 border border-slate-200 p-3 mb-3">
+            <p class="text-[11px] font-semibold text-slate-500 mb-2">Buscar tarifa homologada na ANEEL (preenche ponta/fora ponta/demanda abaixo — exceto Mercado Livre)</p>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <input id="m-aneel-distribuidora" list="lista-distribuidoras-aneel-m" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" placeholder="Distribuidora" />
+                <datalist id="lista-distribuidoras-aneel-m"></datalist>
+              </div>
+              <select id="m-aneel-subgrupo" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs">
+                <option value="">Subgrupo</option>
+                <option value="A1">A1</option>
+                <option value="A2">A2</option>
+                <option value="A3">A3</option>
+                <option value="A3a">A3a</option>
+                <option value="A4" selected>A4</option>
+                <option value="A4a">A4a</option>
+                <option value="A4b">A4b</option>
+                <option value="AS">AS</option>
+              </select>
+              <select id="m-aneel-modalidade" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs">
+                <option value="">Modalidade</option>
+                <option value="Convencional">Convencional</option>
+                <option value="Verde" selected>Verde</option>
+                <option value="Azul">Azul (parcial*)</option>
+              </select>
+            </div>
+            <p id="m-aneel-status" class="text-[11px] mt-2 text-slate-400"></p>
+            <p class="text-[10px] text-slate-400 mt-1">*Azul tem demanda diferente na ponta e fora ponta; este simulador usa só uma demanda — confira o valor antes de usar.</p>
+            <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-200">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">UF (estado)</label>
+                <select id="m-aneel-uf" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs">
+                  <option value="">—</option>
+                  <option value="AC">AC</option><option value="AL">AL</option><option value="AP">AP</option><option value="AM">AM</option>
+                  <option value="BA">BA</option><option value="CE">CE</option><option value="DF">DF</option><option value="ES">ES</option>
+                  <option value="GO">GO</option><option value="MA">MA</option><option value="MT">MT</option><option value="MS">MS</option>
+                  <option value="MG">MG</option><option value="PA">PA</option><option value="PB">PB</option><option value="PR">PR</option>
+                  <option value="PE">PE</option><option value="PI">PI</option><option value="RJ">RJ</option><option value="RN">RN</option>
+                  <option value="RS">RS</option><option value="RO">RO</option><option value="RR">RR</option><option value="SC">SC</option>
+                  <option value="SP">SP</option><option value="SE">SE</option><option value="TO">TO</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">ICMS (%) <span class="text-slate-400 font-normal">— confira</span></label>
+                <input id="m-aneel-icms" type="number" step="0.1" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" placeholder="18" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">PIS/COFINS (%)</label>
+                <input id="m-aneel-piscofins" type="number" step="0.01" value="4.36" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" />
+              </div>
+            </div>
+            <p class="text-[10px] text-amber-700 mt-1">⚠ Alíquota de ICMS é só uma referência por estado (varia por classe de consumo e pode ter adicional de fundo estadual) — confirme a vigente antes de fechar proposta. As tarifas acima são recalculadas com imposto assim que UF/ICMS/PIS-COFINS mudam.</p>
+          </div>
           <div class="grid grid-cols-2 gap-2 text-sm">
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa ponta (R$/kWh)</label><input id="m-tarifa-ponta" type="number" step="0.0001" value="3.04" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa fora ponta (R$/kWh)</label><input id="m-tarifa-fora-ponta" type="number" step="0.0001" value="0.62" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
