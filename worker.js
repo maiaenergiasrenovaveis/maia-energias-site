@@ -918,23 +918,37 @@ async function handleScanConta(request, env) {
     if (img.base64.length > 5.5 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~4MB por página)" }, 400);
   }
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENAI_API_KEY}` },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: PROMPT_SCAN_CONTA },
-            ...imagens.map((img) => ({ type: "image_url", image_url: { url: `data:${img.mimeType};base64,${img.base64}` } })),
-          ],
-        },
-      ],
-    }),
+  const openaiBody = JSON.stringify({
+    model: "gpt-4o-mini",
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: PROMPT_SCAN_CONTA },
+          ...imagens.map((img) => ({ type: "image_url", image_url: { url: `data:${img.mimeType};base64,${img.base64}` } })),
+        ],
+      },
+    ],
   });
+
+  // A chamada com várias imagens pro modelo de visão demora mais e, na prática, às vezes a
+  // conexão de saída do Worker cai no meio ("Network connection lost") — provavelmente um
+  // problema transitório de rede entre a borda da Cloudflare e a OpenAI, não algo que o
+  // conteúdo da requisição cause. Uma tentativa extra resolve a maioria dos casos.
+  let res;
+  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    try {
+      res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENAI_API_KEY}` },
+        body: openaiBody,
+      });
+      break;
+    } catch {
+      if (tentativa === 2) return jsonResponse({ error: "Falha de conexão com a OpenAI mesmo após nova tentativa — tente novamente, ou com menos páginas/uma foto só." }, 502);
+    }
+  }
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
     return jsonResponse({ error: `falha ao consultar a OpenAI (${res.status}): ${errBody.slice(0, 300)}` }, 502);
