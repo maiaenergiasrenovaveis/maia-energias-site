@@ -932,21 +932,27 @@ async function handleScanConta(request, env) {
     ],
   });
 
-  // A chamada com várias imagens pro modelo de visão demora mais e, na prática, às vezes a
-  // conexão de saída do Worker cai no meio ("Network connection lost") — provavelmente um
-  // problema transitório de rede entre a borda da Cloudflare e a OpenAI, não algo que o
-  // conteúdo da requisição cause. Uma tentativa extra resolve a maioria dos casos.
+  // .trim() é deliberado: um secret colado via terminal (ex: `wrangler secret put`) pode
+  // carregar uma quebra de linha no final sem o usuário notar, o que deixa o header
+  // Authorization inválido (CR/LF não é permitido em valor de header) — o fetch() rejeita
+  // ANTES de sequer abrir a conexão, e o erro que sobra ("Network connection lost", nesse
+  // runtime) não deixa claro que a causa real é a chave, não a rede. Isso bateu 100% das
+  // vezes em teste real, o que não combina com um problema de rede só ocasional.
+  const openaiKey = (env.OPENAI_API_KEY || "").trim();
+
   let res;
+  let erroFinal;
   for (let tentativa = 1; tentativa <= 2; tentativa++) {
     try {
       res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENAI_API_KEY}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${openaiKey}` },
         body: openaiBody,
       });
       break;
-    } catch {
-      if (tentativa === 2) return jsonResponse({ error: "Falha de conexão com a OpenAI mesmo após nova tentativa — tente novamente, ou com menos páginas/uma foto só." }, 502);
+    } catch (err) {
+      erroFinal = err;
+      if (tentativa === 2) return jsonResponse({ error: `Falha de conexão com a OpenAI mesmo após nova tentativa (${String(erroFinal)}) — se persistir, confira se a chave (OPENAI_API_KEY) foi salva sem espaços/quebras de linha extras.` }, 502);
     }
   }
   if (!res.ok) {
