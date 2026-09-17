@@ -157,7 +157,8 @@ let cidades = null;
 let chartGeracao, chartPayback;
 // Irradiação (índice de sol pleno) por mês do CALENDÁRIO, não por posição na grade —
 // a grade pode começar em qualquer mês (histórico de consumo nem sempre começa em janeiro).
-const IRRADIACAO_POR_MES_CALENDARIO = [4.7, 5.25, 4.82, 4.7, 4.21, 4.13, 4.15, 4.99, 4.46, 4.6, 4.66, 5.01];
+// Fallback (São Paulo) usado até a busca automática via NASA POWER responder, ou se falhar.
+let irradiacaoPorMesCalendario = [4.7, 5.25, 4.82, 4.7, 4.21, 4.13, 4.15, 4.99, 4.46, 4.6, 4.66, 5.01];
 let mesesRotacionados = MESES;
 
 function atualizarLabelsMeses() {
@@ -170,7 +171,7 @@ function atualizarLabelsMeses() {
     if (irrInput) {
       irrInput.previousElementSibling.textContent = mes;
       const calendarMonth = (mesInicial + i) % 12;
-      irrInput.value = IRRADIACAO_POR_MES_CALENDARIO[calendarMonth];
+      irrInput.value = irradiacaoPorMesCalendario[calendarMonth];
     }
   });
 }
@@ -199,7 +200,7 @@ function initSolar() {
     );
     irradiacaoGrid.insertAdjacentHTML(
       "beforeend",
-      `<div><label class="block text-[10px] text-slate-400">${mes}</label><input id="s-irr-${i}" data-irr-idx="${i}" type="number" step="0.01" value="${IRRADIACAO_POR_MES_CALENDARIO[i]}" class="w-full rounded border border-slate-300 px-1.5 py-1 text-xs" /></div>`
+      `<div><label class="block text-[10px] text-slate-400">${mes}</label><input id="s-irr-${i}" data-irr-idx="${i}" type="number" step="0.01" value="${irradiacaoPorMesCalendario[i]}" class="w-full rounded border border-slate-300 px-1.5 py-1 text-xs" /></div>`
     );
   });
 
@@ -225,19 +226,41 @@ function initSolar() {
     });
     datalist.appendChild(frag);
   });
+  let ultimaCidadeBuscada = null;
   $("s-cidade").addEventListener("input", () => {
     const match = cidades?.find((c) => `${c.municipio} - ${c.uf}`.toLowerCase() === $("s-cidade").value.toLowerCase());
-    if (match) {
-      $("s-cidade-info").textContent = `Lat ${match.lat.toFixed(2)}° · Long ${match.lng.toFixed(2)}° · Inclinação ideal sugerida: ${Math.abs(match.lat).toFixed(0)}°`;
-    } else {
+    if (!match) {
       $("s-cidade-info").textContent = "";
+      return;
     }
+    const infoBase = `Lat ${match.lat.toFixed(2)}° · Long ${match.lng.toFixed(2)}° · Inclinação ideal sugerida: ${Math.abs(match.lat).toFixed(0)}°`;
+    $("s-cidade-info").textContent = infoBase;
+    const chave = `${match.municipio}|${match.uf}`;
+    if (chave === ultimaCidadeBuscada) return;
+    ultimaCidadeBuscada = chave;
+    buscarIrradiacaoAutomatica(match, infoBase);
   });
 
   $("s-simultaneidade").addEventListener("input", () => {
     $("s-simultaneidade-out").textContent = pct($("s-simultaneidade").value);
     computeSolar();
   });
+
+  async function buscarIrradiacaoAutomatica(match, infoBase) {
+    $("s-cidade-info").textContent = `${infoBase} · Buscando irradiação (NASA POWER)...`;
+    try {
+      const res = await fetch(`/interno/api/irradiacao?lat=${match.lat}&lng=${match.lng}`);
+      if (!res.ok) throw new Error("falha na busca");
+      const { mensal } = await res.json();
+      if (!Array.isArray(mensal) || mensal.length !== 12 || mensal.some((v) => typeof v !== "number")) throw new Error("resposta inválida");
+      irradiacaoPorMesCalendario = mensal;
+      atualizarLabelsMeses();
+      computeSolar();
+      $("s-cidade-info").textContent = `${infoBase} · Irradiação preenchida automaticamente (NASA POWER) — pode ajustar manualmente.`;
+    } catch {
+      $("s-cidade-info").textContent = `${infoBase} · Não foi possível buscar a irradiação automaticamente — confira/ajuste manualmente abaixo.`;
+    }
+  }
 
   document.querySelectorAll("#painel-solar input, #painel-solar select").forEach((el) => {
     el.addEventListener("input", computeSolar);

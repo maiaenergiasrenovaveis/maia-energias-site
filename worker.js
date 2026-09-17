@@ -762,6 +762,32 @@ function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 }
 
+const MESES_ORDEM_NASA = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+// Irradiação solar mensal (índice de sol pleno, kWh/m².dia) via NASA POWER — climatologia
+// de 20 anos por ponto (lat/long), sem necessidade de chave de API. O CRESESB (SunData)
+// não expõe uma API pública utilizável por automação; NASA POWER é a alternativa aberta
+// mais usada pra esse mesmo tipo de dado solarimétrico. Cache de 1 ano: é climatologia
+// histórica, não muda de um dia pro outro.
+async function handleIrradiacaoApi(request) {
+  const url = new URL(request.url);
+  const lat = parseFloat(url.searchParams.get("lat"));
+  const lng = parseFloat(url.searchParams.get("lng"));
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return jsonResponse({ error: "lat/lng inválidos" }, 400);
+  }
+  const nasaUrl = `https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=ALLSKY_SFC_SW_DWN&community=RE&longitude=${lng}&latitude=${lat}&format=JSON`;
+  const res = await fetch(nasaUrl, { headers: { "User-Agent": FETCH_HEADERS["User-Agent"] } });
+  if (!res.ok) return jsonResponse({ error: "falha ao consultar NASA POWER" }, 502);
+  const data = await res.json();
+  const porMes = data?.properties?.parameter?.ALLSKY_SFC_SW_DWN;
+  if (!porMes) return jsonResponse({ error: "resposta inesperada da NASA POWER" }, 502);
+  const mensal = MESES_ORDEM_NASA.map((m) => porMes[m]);
+  return new Response(JSON.stringify({ mensal, fonte: "NASA POWER (climatologia 2001-2020)" }), {
+    headers: { "content-type": "application/json", "cache-control": "public, max-age=31536000, immutable" },
+  });
+}
+
 // API de simulações salvas (/interno/api/simulacoes) — banco D1 dedicado
 // (maia-simulador-db), separado do banco do portal de eletropostos para não
 // misturar dados dos dois projetos. Já protegida pelo Basic Auth de /interno/*.
@@ -817,6 +843,16 @@ async function handleFetch(request, env, ctx) {
     } catch (err) {
       return jsonResponse({ error: String(err) }, 500);
     }
+  }
+
+  if (url.pathname === "/interno/api/irradiacao") {
+    return withEdgeCache(request, ctx, async () => {
+      try {
+        return await handleIrradiacaoApi(request);
+      } catch (err) {
+        return jsonResponse({ error: String(err) }, 500);
+      }
+    });
   }
 
   if (url.hostname === "portal.maiaenergiasrenovaveis.com.br" && url.pathname === "/portal/api/eletropostos-sp") {
