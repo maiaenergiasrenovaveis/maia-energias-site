@@ -1,4 +1,4 @@
-import { MESES, calcularDimensionamento, calcularAreaModulos, calcularCapex, calcularContaMes1, calcularPayback } from "../lib/dimensionamentoSolar.js";
+import { MESES, calcularDimensionamento, calcularAreaModulos, calcularModulosQueCabem, calcularCapex, calcularContaMes1, calcularPayback } from "../lib/dimensionamentoSolar.js";
 import { calcularBESS, calcularCenariosGrupoA } from "../lib/dimensionamentoBESS.js";
 import { gerarPropostaPdf } from "./pdfProposta.js";
 
@@ -295,7 +295,7 @@ function computeSolar() {
   const perdasAdicionais = Number($("s-perdas-adicionais").value) / 100;
   const potenciaOverride = $("s-potencia-escolhida").value === "" ? null : Number($("s-potencia-escolhida").value);
 
-  const dim = calcularDimensionamento({
+  let dim = calcularDimensionamento({
     consumoMensal,
     rede,
     irradiacaoMensal,
@@ -309,24 +309,47 @@ function computeSolar() {
     $("s-potencia-escolhida").placeholder = `Sugerida: ${num(dim.potenciaSugeridaKwp, 2)} kWp`;
   }
 
-  const area = calcularAreaModulos(dim.potenciaEscolhidaKwp, {
+  const moduloParams = {
     moduloWp: Number($("s-modulo-wp").value) || 650,
     moduloAreaM2: Number($("s-modulo-area").value) || 3.055,
-  });
-  $("s-out-num-modulos").textContent = `${area.numeroModulos}`;
-  $("s-out-area-telhado").textContent = `${num(area.areaNecessariaTelhado, 0)} m²`;
-  $("s-out-area-solo").textContent = `${num(area.areaNecessariaSolo, 0)} m²`;
+  };
+  let area = calcularAreaModulos(dim.potenciaEscolhidaKwp, moduloParams);
   const tipoInstalacao = $("s-tipo-instalacao").value;
-  const areaNecessariaEscolhida = tipoInstalacao === "solo" ? area.areaNecessariaSolo : area.areaNecessariaTelhado;
   const areaDisponivel = Number($("s-area-disponivel").value) || 0;
+  let limitadoPorArea = false;
+  const potenciaDesejadaKwp = dim.potenciaEscolhidaKwp;
+
   if (areaDisponivel > 0) {
+    const areaNecessariaEscolhida = tipoInstalacao === "solo" ? area.areaNecessariaSolo : area.areaNecessariaTelhado;
     const cabe = areaDisponivel >= areaNecessariaEscolhida;
-    $("s-area-comparacao").innerHTML = cabe
-      ? `<span class="text-emerald-600 font-semibold">✓ Cabe</span> — sobram ${num(areaDisponivel - areaNecessariaEscolhida, 0)} m² de folga.`
-      : `<span class="text-red-600 font-semibold">✗ Não cabe</span> — faltam ${num(areaNecessariaEscolhida - areaDisponivel, 0)} m² (considerando ${tipoInstalacao}).`;
+    if (cabe) {
+      $("s-area-comparacao").innerHTML = `<span class="text-emerald-600 font-semibold">✓ Cabe</span> — sobram ${num(areaDisponivel - areaNecessariaEscolhida, 0)} m² de folga.`;
+    } else {
+      const possivel = calcularModulosQueCabem(areaDisponivel, tipoInstalacao, moduloParams);
+      limitadoPorArea = true;
+      // A área disponível não comporta a potência desejada — o dimensionamento e
+      // toda a viabilidade financeira abaixo passam a usar a potência REAL que
+      // cabe no local, não a que foi digitada em "Potência escolhida".
+      dim = calcularDimensionamento({
+        consumoMensal,
+        rede,
+        irradiacaoMensal,
+        perdas,
+        perdasAdicionais,
+        potenciaEscolhidaKwp: possivel.potenciaMaximaKwp,
+      });
+      area = calcularAreaModulos(dim.potenciaEscolhidaKwp, moduloParams);
+      $("s-area-comparacao").innerHTML =
+        `<span class="text-red-600 font-semibold">✗ Não cabe</span> — faltam ${num(areaNecessariaEscolhida - areaDisponivel, 0)} m² (considerando ${tipoInstalacao}) para os ${num(potenciaDesejadaKwp, 2)} kWp desejados. ` +
+        `Nessa área cabem aproximadamente <strong>${possivel.numeroModulos} módulos (${num(possivel.potenciaMaximaKwp, 2)} kWp)</strong> — ` +
+        `<strong>os cálculos abaixo já foram recalculados usando essa potência real.</strong>`;
+    }
   } else {
     $("s-area-comparacao").textContent = "";
   }
+  $("s-out-num-modulos").textContent = `${area.numeroModulos}`;
+  $("s-out-area-telhado").textContent = `${num(area.areaNecessariaTelhado, 0)} m²`;
+  $("s-out-area-solo").textContent = `${num(area.areaNecessariaSolo, 0)} m²`;
 
   const capex = calcularCapex({
     valorKit: Number($("s-kit").value) || 0,
@@ -360,10 +383,10 @@ function computeSolar() {
     tma: Number($("s-tma").value) / 100,
   });
 
-  ultimoResultadoSolar = { dim, area, tipoInstalacao, capex, tarifas, conta, payback, anoInicial };
+  ultimoResultadoSolar = { dim, area, tipoInstalacao, limitadoPorArea, potenciaDesejadaKwp, capex, tarifas, conta, payback, anoInicial };
 
   $("s-result-cards").innerHTML = `
-    ${cardHtml("Potência escolhida", `${num(dim.potenciaEscolhidaKwp, 2)} kWp`)}
+    ${cardHtml(limitadoPorArea ? "Potência real (limitada pela área)" : "Potência escolhida", `${num(dim.potenciaEscolhidaKwp, 2)} kWp`)}
     ${cardHtml("Geração média mensal", `${num(dim.geracaoMedia, 0)} kWh`)}
     ${cardHtml("Autonomia do sistema", pct(dim.autonomiaPercent))}
     ${cardHtml("Valor final do sistema", brl(capex.valorFinalCliente))}
@@ -430,7 +453,7 @@ function renderChartPayback(linhas) {
 
 async function exportarPdfSolar() {
   if (!ultimoResultadoSolar) return;
-  const { dim, area, tipoInstalacao, capex, conta, payback } = ultimoResultadoSolar;
+  const { dim, area, tipoInstalacao, limitadoPorArea, potenciaDesejadaKwp, capex, conta, payback } = ultimoResultadoSolar;
   const cliente = $("s-cliente").value || "Cliente";
   const cidade = $("s-cidade").value || "";
   const rede = $("s-rede").value;
@@ -446,9 +469,12 @@ async function exportarPdfSolar() {
     `Instalação de sistema fotovoltaico de ${num(dim.potenciaEscolhidaKwp, 2)} kWp, projetado para a irradiação solar local (${num(dim.irradiacaoMedia, 2)} kWh/m².dia em média).`,
     `Geração média estimada de ${num(dim.geracaoMedia, 0)} kWh/mês, cobrindo ${pct(dim.autonomiaPercent)} do consumo (autonomia do sistema).`,
     `${area.numeroModulos} módulos, ocupando ${num(areaEscolhida, 0)} m² de área (instalação em ${tipoInstalacao}).`,
+    limitadoPorArea
+      ? `Potência limitada pela área real disponível no local: o ideal seria ${num(potenciaDesejadaKwp, 2)} kWp, mas o espaço comporta ${num(dim.potenciaEscolhidaKwp, 2)} kWp — todos os valores desta proposta já refletem essa potência real.`
+      : null,
     "Projeto elétrico, ART, instalação completa, materiais e homologação junto à distribuidora inclusos no valor do investimento.",
     "Compensação de créditos de energia conforme a Lei 14.300/2022 (Marco Legal da Geração Distribuída).",
-  ];
+  ].filter(Boolean);
 
   const tabelaFinanceira = [
     ["Consumo médio atual (mensal)", brl(dim.consumoMedioMensal) + " kWh"],

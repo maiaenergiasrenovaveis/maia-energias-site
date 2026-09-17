@@ -71,7 +71,7 @@ export function calcularDimensionamento(p) {
 // Telhado: módulos ficam praticamente contíguos (só folga de manutenção/borda) — pouca perda de área.
 // Solo: fileiras precisam de espaçamento maior entre si pra não sombrear a fileira de trás —
 // regra prática do mercado (~1,7-2,2x a área dos módulos, dependendo da latitude/inclinação).
-export const FATOR_UTILIZACAO_AREA = { telhado: 0.85, solo: 0.5 };
+export const FATOR_UTILIZACAO_AREA = { telhado: 0.7, solo: 0.5 };
 
 /**
  * Número de módulos e área necessária a partir da potência ESCOLHIDA do sistema
@@ -92,6 +92,25 @@ export function calcularAreaModulos(potenciaEscolhidaKwp, p) {
     areaNecessariaTelhado: areaCoberta / FATOR_UTILIZACAO_AREA.telhado,
     areaNecessariaSolo: areaCoberta / FATOR_UTILIZACAO_AREA.solo,
   };
+}
+
+/**
+ * Quantos módulos cabem numa área real disponível, pro tipo de instalação escolhido
+ * (inverso de calcularAreaModulos: aqui a área é o limite, não a potência).
+ * @param {number} areaDisponivelM2
+ * @param {"telhado"|"solo"} tipoInstalacao
+ * @param {object} p
+ * @param {number} p.moduloWp
+ * @param {number} p.moduloAreaM2
+ */
+export function calcularModulosQueCabem(areaDisponivelM2, tipoInstalacao, p) {
+  const moduloWp = p.moduloWp ?? 650;
+  const moduloAreaM2 = p.moduloAreaM2 ?? 3.055;
+  const fator = FATOR_UTILIZACAO_AREA[tipoInstalacao] ?? FATOR_UTILIZACAO_AREA.telhado;
+  const areaCobertaPossivel = areaDisponivelM2 * fator;
+  const numeroModulos = Math.floor(areaCobertaPossivel / moduloAreaM2);
+  const potenciaMaximaKwp = (numeroModulos * moduloWp) / 1000;
+  return { numeroModulos, potenciaMaximaKwp };
 }
 
 /**
