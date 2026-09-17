@@ -1,11 +1,17 @@
 import { MESES, calcularDimensionamento, calcularCapex, calcularContaMes1, calcularPayback } from "../lib/dimensionamentoSolar.js";
 import { calcularBESS, calcularCenariosGrupoA } from "../lib/dimensionamentoBESS.js";
+import { gerarPropostaPdf } from "./pdfProposta.js";
 
 const $ = (id) => document.getElementById(id);
 const brl = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const brl2 = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
 const pct = (n) => (Number(n) * 100 || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%";
 const num = (n, casas = 1) => (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: casas });
+const gerarCodigoProposta = (prefixo) => {
+  const d = new Date();
+  const rand = Math.floor(Math.random() * 900 + 100);
+  return `${prefixo}-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}-${rand}`;
+};
 
 // ---------- Seleção de grupo tarifário ----------
 document.querySelectorAll(".grupo-btn").forEach((btn) => {
@@ -47,6 +53,7 @@ function initSolar() {
   solarInited = true;
 
   $("s-ano-inicial").value = new Date().getFullYear();
+  $("s-proposta-codigo").value = gerarCodigoProposta("SOL");
 
   // Grids de consumo e irradiação
   const consumoDefaults = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -241,66 +248,61 @@ function renderChartPayback(linhas) {
   });
 }
 
-function exportarPdfSolar() {
+async function exportarPdfSolar() {
   if (!ultimoResultadoSolar) return;
-  const { dim, capex, conta, payback, anoInicial } = ultimoResultadoSolar;
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  let y = 20;
+  const { dim, capex, conta, payback } = ultimoResultadoSolar;
   const cliente = $("s-cliente").value || "Cliente";
   const cidade = $("s-cidade").value || "";
+  const rede = $("s-rede").value;
 
-  doc.setFontSize(16);
-  doc.setTextColor(11, 61, 98);
-  doc.text("Proposta Comercial — Sistema de Energia Solar", 14, y);
-  y += 8;
-  doc.setFontSize(10);
-  doc.setTextColor(80, 80, 80);
-  doc.text(`Cliente: ${cliente}    Cidade: ${cidade}    Data: ${new Date().toLocaleDateString("pt-BR")}`, 14, y);
-  y += 10;
+  const diagnostico = [
+    `Consumo médio mensal atual: ${num(dim.consumoMedioMensal, 0)} kWh, em ligação ${rede.toLowerCase()}${cidade ? `, na cidade de ${cidade}` : ""}.`,
+    `Sem geração própria, 100% da energia consumida é comprada da distribuidora à tarifa cheia (R$ ${num(conta.contaSemSolar / dim.consumoMedioMensal || 0, 3)}/kWh equivalente).`,
+    `Taxa de disponibilidade (conta mínima): ${num(dim.taxaDisp, 0)} kWh/mês, cobrados independente da geração.`,
+  ];
 
-  const linha = (label, value) => {
-    doc.setFontSize(11);
-    doc.setTextColor(30, 30, 30);
-    doc.text(label, 14, y);
-    doc.text(value, 140, y);
-    y += 7;
-  };
-  const titulo = (t) => {
-    y += 3;
-    doc.setFontSize(12);
-    doc.setTextColor(11, 61, 98);
-    doc.text(t, 14, y);
-    doc.setDrawColor(245, 166, 35);
-    doc.line(14, y + 1.5, 196, y + 1.5);
-    y += 8;
-  };
+  const escopo = [
+    `Instalação de sistema fotovoltaico de ${num(dim.potenciaEscolhidaKwp, 2)} kWp, projetado para a irradiação solar local (${num(dim.irradiacaoMedia, 2)} kWh/m².dia em média).`,
+    `Geração média estimada de ${num(dim.geracaoMedia, 0)} kWh/mês, cobrindo ${pct(dim.autonomiaPercent)} do consumo (autonomia do sistema).`,
+    "Projeto elétrico, ART, instalação completa, materiais e homologação junto à distribuidora inclusos no valor do investimento.",
+    "Compensação de créditos de energia conforme a Lei 14.300/2022 (Marco Legal da Geração Distribuída).",
+  ];
 
-  titulo("Dimensionamento");
-  linha("Potência escolhida", `${num(dim.potenciaEscolhidaKwp, 2)} kWp`);
-  linha("Geração média mensal", `${num(dim.geracaoMedia, 0)} kWh`);
-  linha("Consumo médio mensal", `${num(dim.consumoMedioMensal, 0)} kWh`);
-  linha("Autonomia do sistema", pct(dim.autonomiaPercent));
+  const tabelaFinanceira = [
+    ["Consumo médio atual (mensal)", brl(dim.consumoMedioMensal) + " kWh"],
+    ["Conta de energia sem o sistema (mensal)", brl2(conta.contaSemSolar)],
+    ["Conta de energia com o sistema (mensal)", brl2(conta.contaComSolar)],
+    ["Economia mensal estimada", `${brl2(conta.descontoReais)} (${pct(conta.descontoPercent)} de redução)`],
+    ["Economia anual acumulada (ano 1)", brl(conta.economiaAnual)],
+    ["Tempo de retorno (payback simples)", `${num(payback.paybackSimples, 1)} anos`],
+  ];
 
-  titulo("Retorno Financeiro");
-  linha("Conta sem solar (mês)", brl2(conta.contaSemSolar));
-  linha("Conta com solar (mês)", brl2(conta.contaComSolar));
-  linha("Economia mensal", `${brl2(conta.descontoReais)} (${pct(conta.descontoPercent)})`);
-  linha("Economia anual (ano 1)", brl(conta.economiaAnual));
-
-  titulo("Investimento");
-  linha("Valor final do sistema", brl(capex.valorFinalCliente));
-  linha("Payback simples", `${num(payback.paybackSimples, 1)} anos`);
-  linha("ROI", pct(payback.roi));
-  linha("TIR", payback.irr != null ? pct(payback.irr) : "—");
-  linha("VPL", brl(payback.vpl));
-
-  y += 5;
-  doc.setFontSize(8);
-  doc.setTextColor(140, 140, 140);
-  doc.text("Estimativas baseadas em dados informados pelo cliente e índices de irradiação da região. Não substitui análise técnica detalhada.", 14, y, { maxWidth: 182 });
-
-  doc.save(`proposta-solar-${(cliente || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`);
+  await gerarPropostaPdf({
+    subtitulo: "Projeto de Energia Solar Fotovoltaica",
+    codigoProposta: $("s-proposta-codigo").value || "—",
+    cliente,
+    responsavelNome: $("s-responsavel-nome").value,
+    responsavelCargo: $("s-responsavel-cargo").value,
+    email: $("s-email").value,
+    resumoExecutivo: `Esta proposta apresenta a solução de geração de energia solar fotovoltaica para as instalações de ${cliente}. Nosso objetivo é reduzir os custos com energia elétrica em até ${pct(conta.descontoPercent)}, gerando energia limpa e previsível pelos próximos 25 anos.`,
+    diagnostico,
+    escopo,
+    tabelaFinanceira,
+    graficoCanvas: $("s-chart-payback"),
+    investimentoTotal: capex.valorFinalCliente,
+    formaPagamento: $("s-forma-pagamento").value,
+    prazoExecucaoDias: $("s-prazo-execucao").value || "—",
+    validadeDias: $("s-validade-proposta").value || "—",
+    cronograma: [
+      "Etapa 1: engenharia de detalhamento, compra de materiais e solicitação de acesso à distribuidora.",
+      "Etapa 2: instalação física dos módulos, inversor e estrutura de fixação.",
+      "Etapa 3: comissionamento, testes, troca do relógio de energia e vistoria da distribuidora.",
+      "Etapa 4: sistema em operação e monitoramento de geração.",
+    ],
+    notaRodape:
+      "Estimativas de geração baseadas em índices de irradiação da região (CRESESB/NASA) e no consumo informado pelo cliente; a geração real varia mês a mês por fatores meteorológicos. ROI, TIR e VPL consideram um horizonte de 25 anos, reajuste de energia e TMA informados na simulação. Não substitui análise técnica de campo.",
+    fileName: `proposta-solar-${(cliente || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`,
+  });
 }
 
 // ============================================================
@@ -313,6 +315,8 @@ let ultimoResultadoBess = null;
 function initBess() {
   if (bessInited) return;
   bessInited = true;
+
+  $("b-proposta-codigo").value = gerarCodigoProposta("BESS");
 
   $("b-usar-ml").addEventListener("change", () => {
     $("b-ml-fields").classList.toggle("hidden", !$("b-usar-ml").checked);
@@ -421,73 +425,69 @@ function renderChartConta(linhas, usouMercadoLivre) {
   });
 }
 
-function exportarPdfBess() {
+async function exportarPdfBess() {
   if (!ultimoResultadoBess) return;
   const { bess, cenarios, modoAquisicao } = ultimoResultadoBess;
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  let y = 20;
   const cliente = $("b-cliente").value || "Cliente";
+  const mlSufixo = cenarios.usarMercadoLivre ? " + Mercado Livre" : "";
 
-  doc.setFontSize(16);
-  doc.setTextColor(11, 61, 98);
-  doc.text("Proposta Comercial — Eficiência Energética + BESS", 14, y);
-  y += 8;
-  doc.setFontSize(10);
-  doc.setTextColor(80, 80, 80);
-  doc.text(`Cliente: ${cliente}    Data: ${new Date().toLocaleDateString("pt-BR")}`, 14, y);
-  y += 10;
+  const diagnostico = [
+    `Demanda contratada atual: ${num(Number($("b-demanda").value), 0)} kW, com consumo de ${num(Number($("b-energia-ponta").value), 0)} kWh/mês no horário de ponta.`,
+    `Tarifa de ponta ${num(Number($("b-tarifa-ponta").value), 2)} vezes mais cara que a tarifa fora de ponta, penalizando o uso de energia nesse período.`,
+    cenarios.usarMercadoLivre
+      ? "Cliente ainda não migrado para o Mercado Livre de energia, pagando tarifas do mercado regulado."
+      : "Cliente operando integralmente no ambiente de contratação regulado (ACR).",
+  ];
 
-  const linha = (label, value) => {
-    doc.setFontSize(11);
-    doc.setTextColor(30, 30, 30);
-    doc.text(label, 14, y);
-    doc.text(value, 140, y);
-    y += 7;
-  };
-  const titulo = (t) => {
-    y += 3;
-    doc.setFontSize(12);
-    doc.setTextColor(11, 61, 98);
-    doc.text(t, 14, y);
-    doc.setDrawColor(245, 166, 35);
-    doc.line(14, y + 1.5, 196, y + 1.5);
-    y += 8;
-  };
+  const escopo = [
+    `Instalação de banco de baterias (BESS) de ${num(bess.potenciaRecomendadaKw, 1)} kW / ${num(bess.capacidadeFinalKwh, 1)} kWh para deslocamento de carga na ponta (peak shaving).`,
+    `Redução da demanda contratada de ${num(Number($("b-demanda").value), 0)} kW para ${num(Number($("b-demanda-pos").value), 0)} kW.`,
+    cenarios.usarMercadoLivre ? `Migração para o Mercado Livre de Energia, com tarifa estimada de R$ ${num(Number($("b-tarifa-ml").value), 4)}/kWh.` : null,
+    modoAquisicao === "eaas"
+      ? "Modelo de assinatura (Energy as a Service) — sem investimento inicial, com mensalidade reajustada anualmente pelo IPCA."
+      : "Aquisição do sistema via investimento direto (CAPEX), com propriedade do ativo pelo cliente.",
+  ].filter(Boolean);
 
-  titulo("Dimensionamento do BESS");
-  linha("Potência recomendada", `${num(bess.potenciaRecomendadaKw, 1)} kW`);
-  linha("Capacidade recomendada", `${num(bess.capacidadeFinalKwh, 1)} kWh`);
-
-  titulo(`Cenário Ano 1${cenarios.usarMercadoLivre ? " — com migração para Mercado Livre" : " — mercado regulado"}`);
-  linha("Conta atual (mês)", brl2(cenarios.linhas[0].contaAtual));
-  linha(`Conta com BESS${cenarios.usarMercadoLivre ? " + Mercado Livre" : ""} (mês)`, brl2(cenarios.linhas[0].contaComBess));
-  linha("Economia mensal", brl2(cenarios.economiaMensalAno1));
-  linha("Economia anual", brl(cenarios.linhas[0].economiaAnual));
-
-  titulo("Investimento");
+  const tabelaFinanceira = [
+    ["Conta atual (mensal, mercado regulado)", brl2(cenarios.linhas[0].contaAtual)],
+    [`Conta com BESS${mlSufixo} (mensal)`, brl2(cenarios.linhas[0].contaComBess)],
+    ["Economia mensal estimada", brl2(cenarios.economiaMensalAno1)],
+    ["Economia anual acumulada (ano 1)", brl(cenarios.linhas[0].economiaAnual)],
+    [`Economia total (${cenarios.linhas.length} anos)`, brl(cenarios.economiaTotalHorizonte)],
+  ];
   if (modoAquisicao === "capex") {
-    linha("Investimento", brl(cenarios.investimento));
-    linha("Payback", cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—");
+    tabelaFinanceira.push(["Tempo de retorno (payback)", cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—"]);
   } else {
-    linha("Modelo", "Assinatura (EaaS) — sem investimento inicial");
-    linha("Mensalidade (nominal)", brl2(cenarios.linhas[0].mensalidadeEaasNominal));
+    tabelaFinanceira.push(["Mensalidade EaaS (nominal)", brl2(cenarios.linhas[0].mensalidadeEaasNominal)]);
     if (cenarios.lucroReal) {
-      linha("Créditos PIS/COFINS + IRPJ/CSLL", pct(1 - cenarios.fatorCreditoTributario));
-      linha("Mensalidade líquida (Lucro Real)", brl2(cenarios.linhas[0].mensalidadeEaasLiquida));
+      tabelaFinanceira.push(["Mensalidade líquida (Lucro Real)", brl2(cenarios.linhas[0].mensalidadeEaasLiquida)]);
     }
   }
-  linha(`Economia total (${cenarios.linhas.length} anos)`, brl(cenarios.economiaTotalHorizonte));
 
-  y += 5;
-  doc.setFontSize(8);
-  doc.setTextColor(140, 140, 140);
-  doc.text(
-    "Estimativas baseadas em dados informados pelo cliente. A efetividade do BESS em cobrir a energia de ponta decai ao longo da vida útil da bateria. O crédito tributário sobre a mensalidade EaaS (Lucro Real) é uma estimativa e depende do enquadramento fiscal real do cliente — consulte a contabilidade dele antes de apresentar como garantido. Não substitui análise técnica detalhada.",
-    14,
-    y,
-    { maxWidth: 182 }
-  );
-
-  doc.save(`proposta-bess-${(cliente || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`);
+  await gerarPropostaPdf({
+    subtitulo: `Projeto de Eficiência Energética + BESS${mlSufixo}`,
+    codigoProposta: $("b-proposta-codigo").value || "—",
+    cliente,
+    responsavelNome: $("b-responsavel-nome").value,
+    responsavelCargo: $("b-responsavel-cargo").value,
+    email: $("b-email").value,
+    resumoExecutivo: `Esta proposta apresenta a solução de armazenamento de energia (BESS) para otimização do consumo elétrico nas instalações de ${cliente}. Nosso objetivo é reduzir os custos operacionais com energia e demanda contratada, com economia mensal estimada de ${brl2(cenarios.economiaMensalAno1)}.`,
+    diagnostico,
+    escopo,
+    tabelaFinanceira,
+    graficoCanvas: $("b-chart-conta"),
+    investimentoTotal: modoAquisicao === "capex" ? cenarios.investimento : 0,
+    formaPagamento: modoAquisicao === "capex" ? $("b-forma-pagamento").value : "Assinatura mensal (EaaS) — sem investimento inicial",
+    prazoExecucaoDias: $("b-prazo-execucao").value || "—",
+    validadeDias: $("b-validade-proposta").value || "—",
+    cronograma: [
+      "Etapa 1: engenharia de detalhamento, dimensionamento final e compra de equipamentos.",
+      "Etapa 2: instalação física do banco de baterias e integração com o quadro elétrico, sem interromper a operação.",
+      "Etapa 3: comissionamento, testes de descarga na ponta e configuração do sistema de controle.",
+      "Etapa 4: acompanhamento da conta de energia e relatório mensal de economia gerada.",
+    ],
+    notaRodape:
+      "Estimativas baseadas em dados informados pelo cliente. A efetividade do BESS em cobrir a energia de ponta decai ao longo da vida útil da bateria, conforme premissa técnica do fabricante. O crédito tributário sobre a mensalidade EaaS (Lucro Real) é uma estimativa e depende do enquadramento fiscal real do cliente — consulte a contabilidade dele antes de apresentar como garantido. Não substitui análise técnica detalhada.",
+    fileName: `proposta-bess-${(cliente || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`,
+  });
 }

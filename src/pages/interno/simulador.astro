@@ -162,6 +162,19 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         <canvas id="s-chart-payback" height="80"></canvas>
       </div>
 
+      <div class="rounded-xl bg-white border border-slate-200 p-5 mb-6">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Dados da proposta</h2>
+        <div class="grid sm:grid-cols-3 gap-3 text-sm">
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Código da proposta</label><input id="s-proposta-codigo" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">A/C (responsável no cliente)</label><input id="s-responsavel-nome" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Cargo</label><input id="s-responsavel-cargo" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">E-mail do cliente</label><input id="s-email" type="email" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Forma de pagamento</label><input id="s-forma-pagamento" type="text" value="40% de sinal, 30% na entrega dos materiais e 30% na entrega técnica" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Prazo de execução (dias úteis)</label><input id="s-prazo-execucao" type="number" value="15" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Validade da proposta (dias)</label><input id="s-validade-proposta" type="number" value="10" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+        </div>
+      </div>
+
       <button type="button" id="s-export-pdf" class="rounded-lg bg-maia-orange hover:bg-maia-orange-dark text-white font-semibold px-5 py-2.5 text-sm transition-colors">Exportar proposta em PDF</button>
     </div>
 
@@ -257,11 +270,25 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         <canvas id="b-chart-conta" height="80"></canvas>
       </div>
 
+      <div class="rounded-xl bg-white border border-slate-200 p-5 mb-6">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Dados da proposta</h2>
+        <div class="grid sm:grid-cols-3 gap-3 text-sm">
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Código da proposta</label><input id="b-proposta-codigo" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">A/C (responsável no cliente)</label><input id="b-responsavel-nome" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Cargo</label><input id="b-responsavel-cargo" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">E-mail do cliente</label><input id="b-email" type="email" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Forma de pagamento</label><input id="b-forma-pagamento" type="text" value="40% de sinal, 30% na entrega dos materiais e 30% na entrega técnica" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Prazo de execução (dias úteis)</label><input id="b-prazo-execucao" type="number" value="20" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Validade da proposta (dias)</label><input id="b-validade-proposta" type="number" value="10" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+        </div>
+      </div>
+
       <button type="button" id="b-export-pdf" class="rounded-lg bg-maia-orange hover:bg-maia-orange-dark text-white font-semibold px-5 py-2.5 text-sm transition-colors">Exportar proposta em PDF</button>
     </div>
   </div>
 
   <script is:inline src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script is:inline src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script is:inline src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="../../scripts/simuladorEficiencia.js"></script>
 </InternoLayout>
