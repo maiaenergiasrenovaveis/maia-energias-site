@@ -46,6 +46,17 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
     <div id="painel-solar" class="hidden">
       <button type="button" class="voltar-btn text-xs font-semibold text-maia-blue-dark mb-4">← Trocar grupo tarifário</button>
 
+      <div class="rounded-xl bg-white border border-slate-200 p-5 mb-6">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Escanear conta de energia (opcional)</h2>
+        <p class="text-[11px] text-slate-500 mb-2">Envie uma foto, print ou PDF da conta antes de preencher — já adianta cliente, cidade, tipo de rede, histórico de consumo e as tarifas (TE/TUSD/ICMS/PIS-COFINS) abaixo.</p>
+        <div class="flex items-center gap-2">
+          <input id="s-scan-conta-arquivo" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" class="flex-1 text-xs" />
+          <button type="button" id="s-scan-conta-btn" class="rounded-lg bg-maia-blue-dark hover:bg-maia-navy text-white font-semibold px-3 py-1.5 text-xs whitespace-nowrap">Escanear</button>
+        </div>
+        <p id="s-scan-conta-status" class="text-[11px] mt-2 text-slate-400"></p>
+        <p class="text-[10px] text-slate-400 mt-1">Até 3 páginas são analisadas, via OpenAI (GPT-4o-mini). Sempre confira os valores preenchidos antes de calcular.</p>
+      </div>
+
       <div class="grid lg:grid-cols-2 gap-6 mb-6">
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Cliente</h2>
@@ -73,15 +84,6 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
 
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Consumo mensal (kWh) — últimos 12 meses</h2>
-          <div class="rounded-lg bg-slate-50 border border-slate-200 p-3 mb-3">
-            <p class="text-[11px] font-semibold text-slate-500 mb-2">Escanear conta de energia (opcional) — preenche o histórico de consumo automaticamente</p>
-            <div class="flex items-center gap-2">
-              <input id="s-scan-conta-arquivo" type="file" accept="image/png,image/jpeg,image/webp" class="flex-1 text-xs" />
-              <button type="button" id="s-scan-conta-btn" class="rounded-lg bg-maia-blue-dark hover:bg-maia-navy text-white font-semibold px-3 py-1.5 text-xs whitespace-nowrap">Escanear</button>
-            </div>
-            <p id="s-scan-conta-status" class="text-[11px] mt-2 text-slate-400"></p>
-            <p class="text-[10px] text-slate-400 mt-1">Foto ou print da conta (PNG/JPG/WEBP, não PDF) — enviada para a OpenAI (GPT-4o-mini) para leitura. Sempre confira os valores preenchidos antes de calcular.</p>
-          </div>
           <div class="mb-2">
             <label class="block text-xs font-semibold text-slate-500 mb-1">Mês da 1ª coluna (nem sempre é janeiro)</label>
             <select id="s-mes-inicial" class="rounded-lg border border-slate-300 px-2 py-1.5 text-xs">
@@ -710,5 +712,10 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
   <script is:inline src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script is:inline src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script is:inline src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script is:inline type="module">
+    import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs";
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.mjs";
+    window.pdfjsLib = pdfjsLib;
+  </script>
   <script src="../../scripts/simuladorEficiencia.js"></script>
 </InternoLayout>

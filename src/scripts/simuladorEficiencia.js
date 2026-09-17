@@ -377,29 +377,73 @@ function initSolar() {
   computeSolar();
 }
 
-function arquivoParaBase64(file) {
+function arquivoParaDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onload = () => resolve(String(reader.result));
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+// Redesenha num canvas limitado a maxDim (maior lado) e reexporta como JPEG — reduz bastante
+// o tamanho de fotos tiradas por celular (que podem vir com vários MB) antes do upload, o que
+// evita erros de rede em conexões mais lentas/instáveis e deixa a chamada à OpenAI mais rápida.
+function redimensionarImagem(img, maxDim = 1800, quality = 0.85) {
+  const escala = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.naturalWidth * escala);
+  canvas.height = Math.round(img.naturalHeight * escala);
+  canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", quality).split(",")[1];
+}
+
+async function imagemArquivoParaBase64(file) {
+  const dataUrl = await arquivoParaDataUrl(file);
+  const img = await new Promise((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = reject;
+    el.src = dataUrl;
+  });
+  return redimensionarImagem(img);
+}
+
+// PDFs de conta variam muito sobre em qual página fica o "Histórico de consumo" (às vezes é
+// a 1ª, às vezes o verso) — em vez de adivinhar, renderiza até 3 páginas como imagens e manda
+// todas juntas pro modelo, que procura os dados em qualquer uma delas.
+async function pdfArquivoParaImagensBase64(file, maxPaginas = 3) {
+  const buffer = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+  const imagens = [];
+  const totalPaginas = Math.min(pdf.numPages, maxPaginas);
+  for (let i = 1; i <= totalPaginas; i++) {
+    const page = await pdf.getPage(i);
+    const viewportBase = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: 1800 / Math.max(viewportBase.width, viewportBase.height) });
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+    imagens.push(canvas.toDataURL("image/jpeg", 0.85).split(",")[1]);
+  }
+  return imagens;
 }
 
 async function escanearContaEnergia() {
   const arquivo = $("s-scan-conta-arquivo").files?.[0];
   const status = $("s-scan-conta-status");
   if (!arquivo) {
-    status.textContent = "Selecione uma imagem da conta primeiro.";
+    status.textContent = "Selecione uma imagem ou PDF da conta primeiro.";
     return;
   }
   status.textContent = "Lendo a conta (pode levar alguns segundos)...";
   try {
-    const imageBase64 = await arquivoParaBase64(arquivo);
+    const imagesBase64 = arquivo.type === "application/pdf" ? await pdfArquivoParaImagensBase64(arquivo) : [await imagemArquivoParaBase64(arquivo)];
     const res = await fetch("/interno/api/scan-conta", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ imageBase64, mimeType: arquivo.type }),
+      body: JSON.stringify({ images: imagesBase64.map((base64) => ({ base64, mimeType: "image/jpeg" })) }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -432,6 +476,35 @@ async function escanearContaEnergia() {
         if (el) el.value = h.kwh;
       });
       preenchidos.push(`${historico.length} meses de consumo`);
+    }
+
+    // Tarifas: a conta mostra o valor JÁ com imposto (é o que o cliente paga). Se a conta também
+    // trouxer as alíquotas de ICMS/PIS-COFINS, dá pra "tirar o imposto" (mesma lógica inversa do
+    // gross-up usado no lookup da ANEEL) e preencher também os campos "sem imposto"; sem as
+    // alíquotas, só dá pra preencher o valor com imposto com segurança.
+    if (Number.isFinite(data.icms_percent)) {
+      $("s-icms").value = data.icms_percent;
+      preenchidos.push("ICMS");
+    }
+    if (Number.isFinite(data.pis_cofins_percent)) {
+      $("s-piscofins").value = data.pis_cofins_percent;
+      preenchidos.push("PIS/COFINS");
+    }
+    const fatorGrossUp = (1 - (Number(data.icms_percent) || 0) / 100) * (1 - (Number(data.pis_cofins_percent) || 0) / 100);
+    const temAliquotas = Number.isFinite(data.icms_percent) && Number.isFinite(data.pis_cofins_percent);
+    if (Number.isFinite(data.te_com_imposto)) {
+      $("s-te-com").value = data.te_com_imposto.toFixed(5);
+      if (temAliquotas) $("s-te-sem").value = (data.te_com_imposto * fatorGrossUp).toFixed(5);
+      preenchidos.push("TE");
+    }
+    if (Number.isFinite(data.tusd_com_imposto)) {
+      $("s-tusd-com").value = data.tusd_com_imposto.toFixed(5);
+      if (temAliquotas) $("s-tusd-sem").value = (data.tusd_com_imposto * fatorGrossUp).toFixed(5);
+      preenchidos.push("TUSD");
+    }
+    if (Number.isFinite(data.iluminacao_publica)) {
+      $("s-iluminacao").value = data.iluminacao_publica;
+      preenchidos.push("iluminação pública");
     }
 
     if (!preenchidos.length) {

@@ -702,8 +702,12 @@ const CSP_PORTAL = [
 const CSP_INTERNO = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+  // worker-src pro worker do pdf.js (renderização de PDF de conta de energia no navegador,
+  // client-side, antes de enviar como imagem pro scan da OpenAI) — cai em script-src sem isso
+  // em navegadores mais novos, mas alguns exigem a diretiva explícita.
+  "worker-src 'self' https://cdn.jsdelivr.net blob:",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  "img-src 'self' data: blob:",
   "connect-src 'self'",
   "font-src 'self'",
   "base-uri 'self'",
@@ -882,14 +886,19 @@ async function handleAneelTarifas(request) {
 // Chave da OpenAI fica só no Worker (secret OPENAI_API_KEY) — nunca é exposta ao navegador.
 // Sem cache: cada conta é um documento pessoal do cliente, não um dado de referência público
 // como os de irradiação/ANEEL acima — nunca deve ficar guardada na borda da Cloudflare.
-const PROMPT_SCAN_CONTA = `Você extrai dados estruturados de contas de energia elétrica brasileiras (Enel, CPFL, Light, Cemig, Copel, Celesc etc). Analise a imagem e retorne APENAS um JSON (sem markdown, sem texto extra) no formato:
+const PROMPT_SCAN_CONTA = `Você extrai dados estruturados de contas de energia elétrica brasileiras (Enel, CPFL, Light, Cemig, Copel, Celesc etc), de clientes do Grupo B (baixa tensão, tarifa única por kWh, sem demanda contratada). Pode receber mais de uma imagem — são páginas da mesma conta (o "Histórico de consumo" e a tabela de tributos às vezes ficam na 1ª página, às vezes no verso); procure os dados em todas elas. Retorne APENAS um JSON (sem markdown, sem texto extra) no formato:
 {
   "cliente": string ou null (nome do titular/unidade consumidora),
   "cidade": string ou null (cidade do endereço de fornecimento, sem UF),
   "uf": string ou null (sigla de 2 letras),
   "distribuidora": string ou null,
   "tipo_rede": "Monofásica" | "Bifásica" | "Trifásica" | null (pela tensão/ligação informada na conta, se houver),
-  "historico_consumo": array de objetos { "mes": "JAN"|"FEV"|"MAR"|"ABR"|"MAI"|"JUN"|"JUL"|"AGO"|"SET"|"OUT"|"NOV"|"DEZ", "kwh": number }, um por mês do gráfico/tabela "Histórico de consumo" (geralmente os últimos 12 meses)
+  "historico_consumo": array de objetos { "mes": "JAN"|"FEV"|"MAR"|"ABR"|"MAI"|"JUN"|"JUL"|"AGO"|"SET"|"OUT"|"NOV"|"DEZ", "kwh": number }, um por mês do gráfico/tabela "Histórico de consumo" (geralmente os últimos 12 meses),
+  "te_com_imposto": number ou null (tarifa de energia/TE em R$/kWh, valor unitário já com impostos, como cobrado na fatura — geralmente na linha "Energia Elétrica" ou "Consumo"),
+  "tusd_com_imposto": number ou null (tarifa TUSD em R$/kWh, valor unitário já com impostos — linha "Energia Elétrica TUSD" ou similar; se a conta só mostrar um valor único de energia sem separar TE/TUSD, deixe os dois null),
+  "icms_percent": number ou null (alíquota de ICMS em %, geralmente na seção de tributos/impostos da conta),
+  "pis_cofins_percent": number ou null (soma das alíquotas de PIS + COFINS em %, se mostradas separadamente some as duas),
+  "iluminacao_publica": number ou null (valor em R$ da Contribuição de Iluminação Pública/COSIP, cobrada à parte)
 }
 Se um campo não estiver visível ou você não tiver certeza, use null (para historico_consumo, use um array vazio). Não invente valores.`;
 
@@ -897,10 +906,17 @@ async function handleScanConta(request, env) {
   if (!env.OPENAI_API_KEY) return jsonResponse({ error: "Leitura automática não configurada (falta OPENAI_API_KEY)." }, 500);
 
   const body = await request.json().catch(() => null);
-  if (!body?.imageBase64 || !body?.mimeType) return jsonResponse({ error: "envie imageBase64 e mimeType" }, 400);
-  if (!/^image\/(png|jpe?g|webp)$/.test(body.mimeType)) return jsonResponse({ error: "formato de imagem não suportado — envie PNG, JPG ou WEBP" }, 400);
-  // ~5.5MB em base64 ≈ 4MB de imagem original — suficiente pra uma foto/print de conta em boa resolução.
-  if (body.imageBase64.length > 5.5 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~4MB)" }, 400);
+  const imagens = Array.isArray(body?.images) ? body.images : [];
+  if (!imagens.length) return jsonResponse({ error: "envie ao menos uma imagem em images" }, 400);
+  if (imagens.length > 3) return jsonResponse({ error: "no máximo 3 páginas/imagens por vez" }, 400);
+  for (const img of imagens) {
+    if (!img?.base64 || !/^image\/(png|jpe?g|webp)$/.test(img.mimeType ?? "")) {
+      return jsonResponse({ error: "cada imagem precisa de base64 e mimeType (PNG, JPG ou WEBP)" }, 400);
+    }
+    // ~5.5MB em base64 ≈ 4MB de imagem original — o front-end já redimensiona antes de enviar,
+    // isso aqui é só uma trava de segurança contra payloads fora do esperado.
+    if (img.base64.length > 5.5 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~4MB por página)" }, 400);
+  }
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -913,7 +929,7 @@ async function handleScanConta(request, env) {
           role: "user",
           content: [
             { type: "text", text: PROMPT_SCAN_CONTA },
-            { type: "image_url", image_url: { url: `data:${body.mimeType};base64,${body.imageBase64}` } },
+            ...imagens.map((img) => ({ type: "image_url", image_url: { url: `data:${img.mimeType};base64,${img.base64}` } })),
           ],
         },
       ],
