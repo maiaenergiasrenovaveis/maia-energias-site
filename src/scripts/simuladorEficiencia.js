@@ -297,7 +297,15 @@ let ultimoResultadoSolar = null;
 
 function computeSolar() {
   const consumoMensal = lerConsumoMensal();
-  if (consumoMensal.every((v) => v === 0)) return;
+  if (consumoMensal.every((v) => v === 0)) {
+    // Sem consumo preenchido não dá pra calcular nada — mas isso precisa ficar visível
+    // pro usuário, em vez de simplesmente não atualizar a tela sem explicação (o que
+    // parece a ferramenta ter travado quando na verdade só falta preencher o consumo).
+    $("s-result-cards").innerHTML = `<div class="sm:col-span-2 lg:col-span-4 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+      ⚠ Preencha o consumo mensal (kWh) acima para calcular os resultados — todos os campos de "Consumo mensal" estão em 0.
+    </div>`;
+    return;
+  }
 
   const rede = $("s-rede").value;
   const irradiacaoMensal = lerIrradiacaoMensal();
@@ -586,7 +594,12 @@ function initBess() {
 
 function computeBess() {
   const consumoPontaMensal = Number($("b-energia-ponta").value) || 0;
-  if (consumoPontaMensal === 0) return;
+  if (consumoPontaMensal === 0) {
+    $("b-result-cards").innerHTML = `<div class="sm:col-span-2 lg:col-span-4 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+      ⚠ Preencha "Energia ponta (kWh/mês)" para calcular os resultados.
+    </div>`;
+    return;
+  }
 
   const bess = calcularBESS({
     consumoPontaMensal,
@@ -772,7 +785,12 @@ function initMigracao() {
 
 function computeMigracao() {
   const consumoAtualKwh = Number($("m-consumo-atual").value) || 0;
-  if (consumoAtualKwh === 0) return;
+  if (consumoAtualKwh === 0) {
+    $("m-result-cards").innerHTML = `<div class="sm:col-span-2 lg:col-span-4 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+      ⚠ Preencha "Consumo atual (kWh/mês)" para calcular os resultados.
+    </div>`;
+    return;
+  }
 
   const investimento = calcularInvestimentoMigracao({
     transformador: Number($("m-transformador").value) || 0,
