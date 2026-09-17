@@ -118,6 +118,31 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         </div>
       </div>
 
+      <div class="rounded-xl bg-white border border-slate-200 p-5 mb-6">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Área necessária para a usina</h2>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-3">
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Potência do módulo (Wp)</label><input id="s-modulo-wp" type="number" value="650" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Área do módulo (m²)</label><input id="s-modulo-area" type="number" step="0.01" value="3.055" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tipo de instalação</label>
+            <select id="s-tipo-instalacao" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+              <option value="telhado" selected>Telhado</option>
+              <option value="solo">Solo</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Área real disponível no local (m²)</label>
+            <input id="s-area-disponivel" type="number" step="0.1" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" placeholder="Preencha para comparar" />
+          </div>
+        </div>
+        <dl class="grid grid-cols-3 gap-2 text-xs bg-slate-50 rounded-lg p-3">
+          <div class="flex justify-between"><dt class="text-slate-500">Módulos necessários</dt><dd id="s-out-num-modulos" class="font-semibold">—</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">Área necessária (telhado)</dt><dd id="s-out-area-telhado" class="font-semibold">—</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">Área necessária (solo)</dt><dd id="s-out-area-solo" class="font-semibold">—</dd></div>
+        </dl>
+        <p id="s-area-comparacao" class="text-[11px] mt-2"></p>
+      </div>
+
       <div class="grid lg:grid-cols-3 gap-6 mb-6">
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Tarifas</h2>

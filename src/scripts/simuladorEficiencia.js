@@ -1,4 +1,4 @@
-import { MESES, calcularDimensionamento, calcularCapex, calcularContaMes1, calcularPayback } from "../lib/dimensionamentoSolar.js";
+import { MESES, calcularDimensionamento, calcularAreaModulos, calcularCapex, calcularContaMes1, calcularPayback } from "../lib/dimensionamentoSolar.js";
 import { calcularBESS, calcularCenariosGrupoA } from "../lib/dimensionamentoBESS.js";
 import { gerarPropostaPdf } from "./pdfProposta.js";
 
@@ -309,6 +309,25 @@ function computeSolar() {
     $("s-potencia-escolhida").placeholder = `Sugerida: ${num(dim.potenciaSugeridaKwp, 2)} kWp`;
   }
 
+  const area = calcularAreaModulos(dim.potenciaEscolhidaKwp, {
+    moduloWp: Number($("s-modulo-wp").value) || 650,
+    moduloAreaM2: Number($("s-modulo-area").value) || 3.055,
+  });
+  $("s-out-num-modulos").textContent = `${area.numeroModulos}`;
+  $("s-out-area-telhado").textContent = `${num(area.areaNecessariaTelhado, 0)} m²`;
+  $("s-out-area-solo").textContent = `${num(area.areaNecessariaSolo, 0)} m²`;
+  const tipoInstalacao = $("s-tipo-instalacao").value;
+  const areaNecessariaEscolhida = tipoInstalacao === "solo" ? area.areaNecessariaSolo : area.areaNecessariaTelhado;
+  const areaDisponivel = Number($("s-area-disponivel").value) || 0;
+  if (areaDisponivel > 0) {
+    const cabe = areaDisponivel >= areaNecessariaEscolhida;
+    $("s-area-comparacao").innerHTML = cabe
+      ? `<span class="text-emerald-600 font-semibold">✓ Cabe</span> — sobram ${num(areaDisponivel - areaNecessariaEscolhida, 0)} m² de folga.`
+      : `<span class="text-red-600 font-semibold">✗ Não cabe</span> — faltam ${num(areaNecessariaEscolhida - areaDisponivel, 0)} m² (considerando ${tipoInstalacao}).`;
+  } else {
+    $("s-area-comparacao").textContent = "";
+  }
+
   const capex = calcularCapex({
     valorKit: Number($("s-kit").value) || 0,
     lucroEquipamentoPercent: Number($("s-lucro-equip").value) / 100,
@@ -341,7 +360,7 @@ function computeSolar() {
     tma: Number($("s-tma").value) / 100,
   });
 
-  ultimoResultadoSolar = { dim, capex, tarifas, conta, payback, anoInicial };
+  ultimoResultadoSolar = { dim, area, tipoInstalacao, capex, tarifas, conta, payback, anoInicial };
 
   $("s-result-cards").innerHTML = `
     ${cardHtml("Potência escolhida", `${num(dim.potenciaEscolhidaKwp, 2)} kWp`)}
@@ -411,7 +430,7 @@ function renderChartPayback(linhas) {
 
 async function exportarPdfSolar() {
   if (!ultimoResultadoSolar) return;
-  const { dim, capex, conta, payback } = ultimoResultadoSolar;
+  const { dim, area, tipoInstalacao, capex, conta, payback } = ultimoResultadoSolar;
   const cliente = $("s-cliente").value || "Cliente";
   const cidade = $("s-cidade").value || "";
   const rede = $("s-rede").value;
@@ -422,9 +441,11 @@ async function exportarPdfSolar() {
     `Taxa de disponibilidade (conta mínima): ${num(dim.taxaDisp, 0)} kWh/mês, cobrados independente da geração.`,
   ];
 
+  const areaEscolhida = tipoInstalacao === "solo" ? area.areaNecessariaSolo : area.areaNecessariaTelhado;
   const escopo = [
     `Instalação de sistema fotovoltaico de ${num(dim.potenciaEscolhidaKwp, 2)} kWp, projetado para a irradiação solar local (${num(dim.irradiacaoMedia, 2)} kWh/m².dia em média).`,
     `Geração média estimada de ${num(dim.geracaoMedia, 0)} kWh/mês, cobrindo ${pct(dim.autonomiaPercent)} do consumo (autonomia do sistema).`,
+    `${area.numeroModulos} módulos, ocupando ${num(areaEscolhida, 0)} m² de área (instalação em ${tipoInstalacao}).`,
     "Projeto elétrico, ART, instalação completa, materiais e homologação junto à distribuidora inclusos no valor do investimento.",
     "Compensação de créditos de energia conforme a Lei 14.300/2022 (Marco Legal da Geração Distribuída).",
   ];

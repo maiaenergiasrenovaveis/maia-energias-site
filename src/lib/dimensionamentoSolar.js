@@ -67,17 +67,31 @@ export function calcularDimensionamento(p) {
   };
 }
 
+// Fator de utilização da área (área ocupada / área total necessária) por tipo de instalação.
+// Telhado: módulos ficam praticamente contíguos (só folga de manutenção/borda) — pouca perda de área.
+// Solo: fileiras precisam de espaçamento maior entre si pra não sombrear a fileira de trás —
+// regra prática do mercado (~1,7-2,2x a área dos módulos, dependendo da latitude/inclinação).
+export const FATOR_UTILIZACAO_AREA = { telhado: 0.85, solo: 0.5 };
+
 /**
- * Dimensionamento de módulos e área (aba "PLACAS SOLARES", caso limitado pela energia).
+ * Número de módulos e área necessária a partir da potência ESCOLHIDA do sistema
+ * (não recalcula a potência — usa a mesma já decidida em calcularDimensionamento).
+ * @param {number} potenciaEscolhidaKwp
+ * @param {object} p
+ * @param {number} p.moduloWp - potência do módulo (Wp), default 650
+ * @param {number} p.moduloAreaM2 - área do módulo (m²), default 3.055
  */
-export function calcularModulos(dim, p) {
-  const geracaoMensalPorModulo = (p.irradiacaoMedia ?? dim.irradiacaoMedia) * 30 * (p.moduloWp / 1000) * dim.fatorPerdas;
-  const energiaAlvo = dim.consumoSemTaxa;
-  const numeroModulos = Math.ceil(energiaAlvo / geracaoMensalPorModulo);
-  const potenciaInstaladaKwp = (numeroModulos * p.moduloWp) / 1000;
-  const areaCoberta = numeroModulos * p.moduloAreaM2;
-  const areaTotalNecessaria = areaCoberta / (p.fatorUtilizacaoArea ?? 0.7);
-  return { geracaoMensalPorModulo, numeroModulos, potenciaInstaladaKwp, areaCoberta, areaTotalNecessaria };
+export function calcularAreaModulos(potenciaEscolhidaKwp, p) {
+  const moduloWp = p.moduloWp ?? 650;
+  const moduloAreaM2 = p.moduloAreaM2 ?? 3.055;
+  const numeroModulos = Math.ceil((potenciaEscolhidaKwp * 1000) / moduloWp);
+  const areaCoberta = numeroModulos * moduloAreaM2;
+  return {
+    numeroModulos,
+    areaCoberta,
+    areaNecessariaTelhado: areaCoberta / FATOR_UTILIZACAO_AREA.telhado,
+    areaNecessariaSolo: areaCoberta / FATOR_UTILIZACAO_AREA.solo,
+  };
 }
 
 /**
