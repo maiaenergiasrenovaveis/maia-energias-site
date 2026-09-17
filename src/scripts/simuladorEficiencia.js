@@ -389,7 +389,7 @@ function arquivoParaDataUrl(file) {
 // Redesenha num canvas limitado a maxDim (maior lado) e reexporta como JPEG — reduz bastante
 // o tamanho de fotos tiradas por celular (que podem vir com vários MB) antes do upload, o que
 // evita erros de rede em conexões mais lentas/instáveis e deixa a chamada à OpenAI mais rápida.
-function redimensionarImagem(img, maxDim = 1800, quality = 0.85) {
+function redimensionarImagem(img, maxDim = 1200, quality = 0.8) {
   const escala = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(img.naturalWidth * escala);
@@ -412,7 +412,7 @@ async function imagemArquivoParaBase64(file) {
 // PDFs de conta variam muito sobre em qual página fica o "Histórico de consumo" (às vezes é
 // a 1ª, às vezes o verso) — em vez de adivinhar, renderiza até 3 páginas como imagens e manda
 // todas juntas pro modelo, que procura os dados em qualquer uma delas.
-async function pdfArquivoParaImagensBase64(file, maxPaginas = 3) {
+async function pdfArquivoParaImagensBase64(file, maxPaginas = 2) {
   const buffer = await file.arrayBuffer();
   const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
   const imagens = [];
@@ -420,12 +420,12 @@ async function pdfArquivoParaImagensBase64(file, maxPaginas = 3) {
   for (let i = 1; i <= totalPaginas; i++) {
     const page = await pdf.getPage(i);
     const viewportBase = page.getViewport({ scale: 1 });
-    const viewport = page.getViewport({ scale: 1800 / Math.max(viewportBase.width, viewportBase.height) });
+    const viewport = page.getViewport({ scale: 1200 / Math.max(viewportBase.width, viewportBase.height) });
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-    imagens.push(canvas.toDataURL("image/jpeg", 0.85).split(",")[1]);
+    imagens.push(canvas.toDataURL("image/jpeg", 0.8).split(",")[1]);
   }
   return imagens;
 }

@@ -932,27 +932,42 @@ async function handleScanConta(request, env) {
     ],
   });
 
-  // .trim() é deliberado: um secret colado via terminal (ex: `wrangler secret put`) pode
-  // carregar uma quebra de linha no final sem o usuário notar, o que deixa o header
-  // Authorization inválido (CR/LF não é permitido em valor de header) — o fetch() rejeita
-  // ANTES de sequer abrir a conexão, e o erro que sobra ("Network connection lost", nesse
-  // runtime) não deixa claro que a causa real é a chave, não a rede. Isso bateu 100% das
-  // vezes em teste real, o que não combina com um problema de rede só ocasional.
   const openaiKey = (env.OPENAI_API_KEY || "").trim();
 
+  // "Network connection lost" persistiu mesmo depois do .trim() na chave — descarta a
+  // hipótese de header inválido. O padrão bate mais com o workerd derrubando a conexão de
+  // saída quando a resposta do modelo de visão demora demais (várias imagens em alta resolução
+  // pro GPT-4o-mini processar) — por isso um AbortController com timeout explícito aqui: se for
+  // isso mesmo, a mensagem de erro passa a dizer "demorou demais" em vez do genérico de rede,
+  // confirmando a causa em vez de só adivinhar de novo.
   let res;
   let erroFinal;
   for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
     try {
       res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${openaiKey}` },
         body: openaiBody,
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       break;
     } catch (err) {
+      clearTimeout(timeoutId);
       erroFinal = err;
-      if (tentativa === 2) return jsonResponse({ error: `Falha de conexão com a OpenAI mesmo após nova tentativa (${String(erroFinal)}) — se persistir, confira se a chave (OPENAI_API_KEY) foi salva sem espaços/quebras de linha extras.` }, 502);
+      if (tentativa === 2) {
+        const foiTimeout = err.name === "AbortError";
+        return jsonResponse(
+          {
+            error: foiTimeout
+              ? "A OpenAI demorou mais de 45s para responder (comum com várias páginas em alta resolução) — tente com só 1 página/foto."
+              : `Falha de conexão com a OpenAI mesmo após nova tentativa (${String(erroFinal)}).`,
+          },
+          502
+        );
+      }
     }
   }
   if (!res.ok) {
