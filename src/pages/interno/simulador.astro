@@ -11,7 +11,7 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
     </div>
 
     <!-- Etapa 0: seleção do grupo tarifário -->
-    <div id="grupo-selector" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+    <div id="grupo-selector" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       <button type="button" data-grupo="B" class="grupo-btn text-left rounded-2xl bg-white border-2 border-slate-200 p-6 hover:border-maia-blue transition-colors">
         <p class="text-xs font-bold uppercase tracking-wide text-maia-blue-dark">Grupo B</p>
         <h2 class="mt-1 font-bold text-maia-navy text-lg">Baixa tensão — Dimensionamento Solar</h2>
@@ -26,6 +26,11 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         <p class="text-xs font-bold uppercase tracking-wide text-maia-blue-dark">Grupo B → Grupo A</p>
         <h2 class="mt-1 font-bold text-maia-navy text-lg">Migração por aumento de carga + ML</h2>
         <p class="mt-2 text-sm text-slate-500">Cliente Grupo B com carga crescendo: compara a conta como Grupo B vs Grupo A (com Mercado Livre opcional) no mesmo consumo projetado, e o payback do investimento de conexão (subestação).</p>
+      </button>
+      <button type="button" data-grupo="Carregador" class="grupo-btn text-left rounded-2xl bg-white border-2 border-slate-200 p-6 hover:border-maia-blue transition-colors">
+        <p class="text-xs font-bold uppercase tracking-wide text-maia-blue-dark">Elétrico</p>
+        <h2 class="mt-1 font-bold text-maia-navy text-lg">Dimensionamento — Carregador Veicular</h2>
+        <p class="mt-2 text-sm text-slate-500">Circuito dedicado do carregador (EVSE): corrente, seção de cabo, eletroduto, disjuntor, DPS e DR de referência conforme a NBR 5410.</p>
       </button>
     </div>
 
@@ -569,6 +574,78 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
         <button type="button" id="m-export-pdf" class="rounded-lg bg-maia-orange hover:bg-maia-orange-dark text-white font-semibold px-5 py-2.5 text-sm transition-colors">Exportar proposta em PDF</button>
         <button type="button" id="m-salvar" class="rounded-lg bg-white border border-maia-navy/30 hover:bg-slate-50 text-maia-navy font-semibold px-5 py-2.5 text-sm transition-colors">Salvar simulação</button>
         <span id="m-salvar-status" class="text-xs text-slate-400"></span>
+      </div>
+    </div>
+
+    <!-- ============ CARREGADOR VEICULAR: DIMENSIONAMENTO ELÉTRICO (NBR 5410) ============ -->
+    <div id="painel-carregador" class="hidden">
+      <button type="button" class="voltar-btn text-xs font-semibold text-maia-blue-dark mb-4">← Trocar grupo tarifário</button>
+
+      <div class="grid lg:grid-cols-2 gap-6 mb-6">
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Cliente</h2>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div class="col-span-2"><label class="block text-xs font-semibold text-slate-500 mb-1">Nome do cliente</label><input id="c-cliente" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2" /></div>
+          </div>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Carregador veicular (EVSE)</h2>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Potência do carregador (kW)</label><input id="c-potencia" type="number" step="0.1" value="22" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tensão de alimentação (V)</label>
+              <select id="c-tensao" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                <option value="127">127 V</option>
+                <option value="220" selected>220 V</option>
+                <option value="380">380 V</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tipo de ligação</label>
+              <select id="c-ligacao" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                <option value="monofasico">Monofásico (F+N)</option>
+                <option value="bifasico" selected>Bifásico (F+F)</option>
+                <option value="trifasico">Trifásico (3F+N)</option>
+              </select>
+            </div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Fator de potência (cosφ)</label><input id="c-fp" type="number" step="0.01" min="0.1" max="1" value="0.98" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Distância do QDC ao carregador (m)</label><input id="c-distancia" type="number" step="0.5" value="15" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Queda de tensão máx. (%)</label><input id="c-queda-max" type="number" step="0.1" value="4" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Método de instalação</label>
+              <select id="c-metodo" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                <option value="B1" selected>B1 — eletroduto embutido em alvenaria</option>
+                <option value="C">C — eletroduto/cabo aparente ou bandeja</option>
+              </select>
+            </div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Temperatura ambiente (°C)</label><input id="c-temperatura" type="number" step="1" value="30" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div class="col-span-2"><label class="block text-[11px] font-semibold text-slate-500 mb-1">Circuitos agrupados no mesmo eletroduto/bandeja</label><input id="c-agrupamento" type="number" step="1" min="1" value="1" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="c-result-cards" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6"></div>
+
+      <div class="grid lg:grid-cols-2 gap-6 mb-6">
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Condutores e eletroduto</h2>
+          <dl id="c-condutores" class="space-y-2 text-sm"></dl>
+        </div>
+        <div class="rounded-xl bg-white border border-slate-200 p-5">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Proteções — disjuntor, DPS e DR</h2>
+          <dl id="c-protecoes" class="space-y-2 text-sm"></dl>
+        </div>
+      </div>
+
+      <div id="c-avisos" class="mb-4"></div>
+
+      <div class="rounded-xl bg-amber-50 border border-amber-200 p-4 text-xs text-amber-800 mb-6">
+        ⚠ Dimensionamento de <strong>referência</strong>, a partir dos critérios gerais da NBR 5410 (ampacidade — métodos B1/C, condutor de cobre, isolação PVC 70°C — e fatores de correção de temperatura/agrupamento), para pré-orçamento e conversa comercial. Não substitui projeto elétrico executivo assinado por engenheiro responsável (ART). O DR foi fixado em <strong>Tipo A</strong> partindo do princípio de que o próprio carregador já traz proteção interna contra corrente de fuga contínua (Tipo B/RDC-DD) — confirme essa característica na ficha técnica do equipamento antes de aplicar em campo. Confirme sempre seção final, disjuntor, DPS e DR com o projetista, em especial se houver mais de um carregador no mesmo circuito/QDC.
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="button" id="c-salvar" class="rounded-lg bg-white border border-maia-navy/30 hover:bg-slate-50 text-maia-navy font-semibold px-5 py-2.5 text-sm transition-colors">Salvar simulação</button>
+        <span id="c-salvar-status" class="text-xs text-slate-400"></span>
       </div>
     </div>
   </div>

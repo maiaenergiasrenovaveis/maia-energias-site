@@ -1,6 +1,7 @@
 import { MESES, calcularDimensionamento, calcularAreaModulos, calcularModulosQueCabem, calcularCapex, calcularContaMes1, calcularPayback } from "../lib/dimensionamentoSolar.js";
 import { calcularBESS, calcularCenariosGrupoA } from "../lib/dimensionamentoBESS.js";
 import { calcularInvestimentoMigracao, calcularCenariosMigracao } from "../lib/migracaoGrupoA.js";
+import { calcularDimensionamentoEletrico } from "../lib/dimensionamentoEletrico.js";
 import { gerarPropostaPdf } from "./pdfProposta.js";
 
 const $ = (id) => document.getElementById(id);
@@ -109,6 +110,9 @@ document.querySelectorAll(".grupo-btn").forEach((btn) => {
     } else if (btn.dataset.grupo === "A") {
       $("painel-bess").classList.remove("hidden");
       initBess();
+    } else if (btn.dataset.grupo === "Carregador") {
+      $("painel-carregador").classList.remove("hidden");
+      initCarregador();
     } else {
       $("painel-migracao").classList.remove("hidden");
       initMigracao();
@@ -120,6 +124,7 @@ document.querySelectorAll(".voltar-btn").forEach((btn) => {
     $("painel-solar").classList.add("hidden");
     $("painel-bess").classList.add("hidden");
     $("painel-migracao").classList.add("hidden");
+    $("painel-carregador").classList.add("hidden");
     $("grupo-selector").classList.remove("hidden");
     $("simulacoes-salvas-wrap").classList.remove("hidden");
   });
@@ -190,11 +195,16 @@ async function carregarSimulacao(id, tipo) {
     initBess();
     aplicarCamposPainel("painel-bess", row.dados);
     computeBess();
-  } else {
+  } else if (tipo === "migracao") {
     $("painel-migracao").classList.remove("hidden");
     initMigracao();
     aplicarCamposPainel("painel-migracao", row.dados);
     computeMigracao();
+  } else {
+    $("painel-carregador").classList.remove("hidden");
+    initCarregador();
+    aplicarCamposPainel("painel-carregador", row.dados);
+    computeCarregador();
   }
 }
 
@@ -223,7 +233,7 @@ async function carregarListaSimulacoes() {
         (r) => `
       <div class="flex items-center justify-between p-3 gap-3">
         <div class="min-w-0">
-          <span class="text-[10px] font-bold uppercase tracking-wide ${r.tipo === "solar" ? "text-maia-blue-dark" : r.tipo === "bess" ? "text-maia-orange-dark" : "text-maia-green"}">${r.tipo === "solar" ? "Grupo B · Solar" : r.tipo === "bess" ? "Grupo A · BESS" : "Grupo B → A · Migração"}</span>
+          <span class="text-[10px] font-bold uppercase tracking-wide ${r.tipo === "solar" ? "text-maia-blue-dark" : r.tipo === "bess" ? "text-maia-orange-dark" : r.tipo === "migracao" ? "text-maia-green" : "text-slate-500"}">${r.tipo === "solar" ? "Grupo B · Solar" : r.tipo === "bess" ? "Grupo A · BESS" : r.tipo === "migracao" ? "Grupo B → A · Migração" : "Elétrico · Carregador"}</span>
           <p class="font-semibold text-maia-navy truncate">${r.cliente || "(sem nome)"}</p>
           <p class="text-[11px] text-slate-400">${new Date(r.criado_em).toLocaleString("pt-BR")}</p>
         </div>
@@ -1080,4 +1090,73 @@ async function exportarPdfMigracao() {
       "Comparação construída a partir das regras gerais de tarifação Grupo B/Grupo A e Mercado Livre — não há uma planilha de referência específica para este cenário; os valores de tarifa e investimento devem ser ajustados caso a caso com a distribuidora local e um orçamento de engenharia. Não substitui análise técnica detalhada nem estudo de acesso junto à distribuidora.",
     fileName: `proposta-migracao-${(cliente || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`,
   });
+}
+
+// ---------- Carregador veicular: dimensionamento elétrico (NBR 5410) ----------
+let carregadorInited = false;
+
+function initCarregador() {
+  if (carregadorInited) return;
+  carregadorInited = true;
+
+  document.querySelectorAll("#painel-carregador input, #painel-carregador select").forEach((el) => {
+    el.addEventListener("input", computeCarregador);
+  });
+
+  $("c-salvar").addEventListener("click", () => salvarSimulacao("carregador", "painel-carregador", "c-cliente", "c-salvar-status"));
+
+  computeCarregador();
+}
+
+function computeCarregador() {
+  const potenciaKw = Number($("c-potencia").value) || 0;
+  if (potenciaKw === 0) {
+    $("c-result-cards").innerHTML = `<div class="sm:col-span-2 lg:col-span-4 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+      ⚠ Preencha a "Potência do carregador (kW)" para calcular o dimensionamento.
+    </div>`;
+    $("c-condutores").innerHTML = "";
+    $("c-protecoes").innerHTML = "";
+    $("c-avisos").innerHTML = "";
+    return;
+  }
+
+  const r = calcularDimensionamentoEletrico({
+    potenciaKw,
+    tensaoV: Number($("c-tensao").value) || 220,
+    tipoLigacao: $("c-ligacao").value,
+    fatorPotencia: Number($("c-fp").value) || 0.98,
+    distanciaM: Number($("c-distancia").value) || 0,
+    quedaMaxPercent: Number($("c-queda-max").value) || 4,
+    metodoInstalacao: $("c-metodo").value,
+    temperaturaAmbiente: Number($("c-temperatura").value),
+    circuitosAgrupados: Number($("c-agrupamento").value) || 1,
+  });
+
+  $("c-result-cards").innerHTML = `
+    ${cardHtml("Corrente de projeto", `${num(r.correnteProjeto, 1)} A`)}
+    ${cardHtml("Seção do cabo (fase)", `${r.secaoFaseMm2} mm²`)}
+    ${cardHtml("Disjuntor recomendado", `${r.disjuntorA} A · curva ${r.disjuntorCurva}`)}
+    ${cardHtml("Queda de tensão calculada", `${num(r.quedaTensaoPercent, 2)}%`)}
+  `;
+
+  $("c-condutores").innerHTML = `
+    ${linhaHtml("Corrente nominal do carregador", `${num(r.correnteNominal, 1)} A`)}
+    ${linhaHtml("Corrente de projeto (carga contínua, ×1,25)", `${num(r.correnteProjeto, 1)} A`)}
+    ${linhaHtml("Fator de correção (temp. × agrupamento)", num(r.fatorTemp * r.fatorAgrup, 2))}
+    ${linhaHtml("Seção do cabo — fase", `${r.secaoFaseMm2} mm²`)}
+    ${r.secaoNeutroMm2 != null ? linhaHtml("Seção do cabo — neutro", `${r.secaoNeutroMm2} mm²`) : linhaHtml("Neutro", "não aplicável (trifásico sem neutro)")}
+    ${linhaHtml("Seção do cabo — terra (PE)", `${r.secaoTerraMm2} mm²`)}
+    ${linhaHtml("Capacidade de condução corrigida (Iz)", `${num(r.capacidadeCaboA, 1)} A`)}
+    ${linhaHtml("Eletroduto recomendado", r.eletroduto)}
+  `;
+
+  $("c-protecoes").innerHTML = `
+    ${linhaHtml("Disjuntor", `${r.disjuntorA} A, curva ${r.disjuntorCurva}`)}
+    ${linhaHtml("DPS", `Classe ${r.dps.classe} · Uc ${r.dps.ucV} V · In ${r.dps.inKa} kA · Imáx ${r.dps.imaxKa} kA`)}
+    ${linhaHtml("DR (proteção diferencial-residual)", `Tipo ${r.dr.tipo} · ${r.dr.sensibilidadeMa} mA · ${r.dr.nominalA} A`)}
+  `;
+
+  $("c-avisos").innerHTML = r.avisos.length
+    ? r.avisos.map((a) => `<div class="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 mb-2">⚠ ${a}</div>`).join("")
+    : "";
 }
