@@ -233,6 +233,14 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
           </div>
           <div id="b-eaas-fields" class="grid grid-cols-1 gap-2 text-sm hidden">
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Mensalidade inicial (R$)</label><input id="b-mensalidade" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <label class="flex items-center gap-2 mt-1 text-sm">
+              <input id="b-lucro-real" type="checkbox" class="h-4 w-4" />
+              <span class="font-semibold text-slate-600">Cliente no regime Lucro Real (créditos tributários sobre a mensalidade)</span>
+            </label>
+            <div id="b-lucro-real-fields" class="grid grid-cols-2 gap-2 hidden">
+              <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Crédito PIS/COFINS (%)</label><input id="b-credito-piscofins" type="number" step="0.01" value="9.25" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+              <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Crédito IRPJ+CSLL (%)</label><input id="b-credito-irpjcsll" type="number" step="0.1" value="34" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            </div>
           </div>
           <div class="grid grid-cols-2 gap-2 text-sm mt-3">
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Horizonte (anos)</label><input id="b-horizonte" type="number" value="10" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>

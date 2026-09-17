@@ -83,6 +83,7 @@ export function calcularCenariosGrupoA(p) {
   const horizonte = p.horizonteAnos ?? 10;
   const reajusteTarifario = p.reajusteTarifario ?? 0.125; // +12,5% a.a. observado nas planilhas de referência
   const ipca = p.ipca ?? 0.0514;
+  const usarMercadoLivre = !!(p.usarMercadoLivre && p.tarifaMercadoLivre != null);
 
   const base = {
     energiaPontaKwh: p.energiaPontaKwh,
@@ -93,6 +94,14 @@ export function calcularCenariosGrupoA(p) {
     iluminacaoPublica: p.iluminacaoPublica ?? 0,
     outros: p.outros ?? 0,
   };
+
+  // Crédito tributário sobre a mensalidade EaaS para clientes no regime Lucro Real:
+  // a mensalidade é uma despesa operacional dedutível, então parte do valor pago
+  // retorna como crédito de PIS/COFINS e de IRPJ+CSLL. Só se aplica ao modo EaaS.
+  const lucroReal = !!p.lucroReal;
+  const creditoPisCofins = p.creditoPisCofinsPercent ?? 0.0925;
+  const creditoIrpjCsll = p.creditoIrpjCsllPercent ?? 0.34;
+  const fatorCreditoTributario = lucroReal ? 1 - creditoPisCofins - creditoIrpjCsll : 1;
 
   const linhas = [];
   let tarifaPonta = p.tarifaPonta;
@@ -117,28 +126,23 @@ export function calcularCenariosGrupoA(p) {
     });
 
     const efetividade = efetividadeBessNoAno(anoRelativo);
+    // Cenário "com BESS": se a migração para Mercado Livre está marcada, ela é
+    // aplicada aqui (substitui as tarifas ponta/fora ponta reguladas pela tarifa
+    // ML sobre toda a energia) — não é um "pega o mais barato" automático, é a
+    // combinação que o usuário escolheu modelar.
     const comBess = calcularContaGrupoA({
       ...base,
       energiaPontaKwh: base.energiaPontaKwh * (1 - efetividade),
       demandaContratadaKw: p.demandaContratadaKwPosBess ?? base.demandaContratadaKw,
       tarifaPonta,
       tarifaForaPonta,
-      mercadoLivre: false,
+      tarifaMercadoLivre,
+      mercadoLivre: usarMercadoLivre,
     });
 
-    let comBessMercadoLivre = null;
-    if (p.usarMercadoLivre && tarifaMercadoLivre != null) {
-      comBessMercadoLivre = calcularContaGrupoA({
-        ...base,
-        energiaPontaKwh: base.energiaPontaKwh * (1 - efetividade),
-        demandaContratadaKw: p.demandaContratadaKwPosBess ?? base.demandaContratadaKw,
-        tarifaMercadoLivre,
-        mercadoLivre: true,
-      });
-    }
-
-    const melhorComBess = comBessMercadoLivre && comBessMercadoLivre.total < comBess.total ? comBessMercadoLivre : comBess;
-    const custoComBessTotal = melhorComBess.total + (p.modoAquisicao === "eaas" ? mensalidadeEaas : 0);
+    const mensalidadeEaasLiquida = mensalidadeEaas * fatorCreditoTributario;
+    const custoAquisicaoMensal = p.modoAquisicao === "eaas" ? mensalidadeEaasLiquida : 0;
+    const custoComBessTotal = comBess.total + custoAquisicaoMensal;
 
     const economiaMensal = atual.total - custoComBessTotal;
 
@@ -148,8 +152,9 @@ export function calcularCenariosGrupoA(p) {
       efetividadeBess: efetividade,
       contaAtual: atual.total,
       contaComBess: custoComBessTotal,
-      usouMercadoLivre: melhorComBess === comBessMercadoLivre,
-      mensalidadeEaas: p.modoAquisicao === "eaas" ? mensalidadeEaas : 0,
+      usouMercadoLivre: usarMercadoLivre,
+      mensalidadeEaasNominal: p.modoAquisicao === "eaas" ? mensalidadeEaas : 0,
+      mensalidadeEaasLiquida: p.modoAquisicao === "eaas" ? mensalidadeEaasLiquida : 0,
       economiaMensal,
       economiaAnual: economiaMensal * 12,
     });
@@ -160,7 +165,7 @@ export function calcularCenariosGrupoA(p) {
   const paybackMeses = investimento > 0 && economiaMensalAno1 > 0 ? investimento / economiaMensalAno1 : null;
   const economiaTotalHorizonte = linhas.reduce((acc, l) => acc + l.economiaAnual, 0);
 
-  return { linhas, economiaMensalAno1, investimento, paybackMeses, economiaTotalHorizonte };
+  return { linhas, economiaMensalAno1, investimento, paybackMeses, economiaTotalHorizonte, usarMercadoLivre, lucroReal, fatorCreditoTributario };
 }
 
 /**

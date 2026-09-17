@@ -324,6 +324,10 @@ function initBess() {
     $("b-eaas-fields").classList.toggle("hidden", !eaas);
     computeBess();
   });
+  $("b-lucro-real").addEventListener("change", () => {
+    $("b-lucro-real-fields").classList.toggle("hidden", !$("b-lucro-real").checked);
+    computeBess();
+  });
 
   document.querySelectorAll("#painel-bess input, #painel-bess select").forEach((el) => {
     el.addEventListener("input", computeBess);
@@ -370,6 +374,9 @@ function computeBess() {
     modoAquisicao,
     investimentoBess: Number($("b-investimento").value) || 0,
     mensalidadeEaasInicial: Number($("b-mensalidade").value) || 0,
+    lucroReal: $("b-lucro-real").checked,
+    creditoPisCofinsPercent: Number($("b-credito-piscofins").value) / 100,
+    creditoIrpjCsllPercent: Number($("b-credito-irpjcsll").value) / 100,
     horizonteAnos: Number($("b-horizonte").value) || 10,
     reajusteTarifario: Number($("b-reajuste").value) / 100,
     ipca: Number($("b-ipca").value) / 100,
@@ -377,26 +384,37 @@ function computeBess() {
 
   ultimoResultadoBess = { bess, cenarios, modoAquisicao };
 
-  $("b-result-cards").innerHTML = `
-    ${cardHtml("Potência BESS", `${num(bess.potenciaRecomendadaKw, 1)} kW`)}
-    ${cardHtml("Capacidade BESS", `${num(bess.capacidadeFinalKwh, 1)} kWh`)}
-    ${cardHtml("Economia mensal (ano 1)", brl(cenarios.economiaMensalAno1))}
-    ${cardHtml(modoAquisicao === "capex" ? "Payback" : "Economia total do horizonte", modoAquisicao === "capex" ? (cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—") : brl(cenarios.economiaTotalHorizonte))}
-  `;
+  const cards = [
+    cardHtml("Potência BESS", `${num(bess.potenciaRecomendadaKw, 1)} kW`),
+    cardHtml("Capacidade BESS", `${num(bess.capacidadeFinalKwh, 1)} kWh`),
+    cardHtml("Economia mensal (ano 1)", brl(cenarios.economiaMensalAno1)),
+    cardHtml(
+      modoAquisicao === "capex" ? "Payback" : "Economia total do horizonte",
+      modoAquisicao === "capex" ? (cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—") : brl(cenarios.economiaTotalHorizonte)
+    ),
+  ];
+  if (modoAquisicao === "eaas" && cenarios.lucroReal) {
+    const l1 = cenarios.linhas[0];
+    cards.push(cardHtml("Mensalidade EaaS (nominal)", brl2(l1.mensalidadeEaasNominal)));
+    cards.push(cardHtml("Mensalidade EaaS (líquida, Lucro Real)", brl2(l1.mensalidadeEaasLiquida)));
+  }
+  $("b-result-cards").innerHTML = cards.join("");
 
-  renderChartConta(cenarios.linhas);
+  renderChartConta(cenarios.linhas, cenarios.usarMercadoLivre);
 }
 
-function renderChartConta(linhas) {
+function renderChartConta(linhas, usouMercadoLivre) {
   const ctx = $("b-chart-conta");
+  const heading = ctx.closest(".rounded-xl")?.querySelector("h2");
+  if (heading) heading.textContent = `Conta mensal — Atual vs. Com BESS${usouMercadoLivre ? " + Mercado Livre" : ""}`;
   if (chartConta) chartConta.destroy();
   chartConta = new Chart(ctx, {
     type: "line",
     data: {
       labels: linhas.map((l) => `Ano ${l.anoRelativo}`),
       datasets: [
-        { label: "Conta atual", data: linhas.map((l) => l.contaAtual), borderColor: "#e08e0b", tension: 0.15 },
-        { label: "Conta com BESS", data: linhas.map((l) => l.contaComBess), borderColor: "#1c75bc", tension: 0.15 },
+        { label: "Conta atual (mercado regulado)", data: linhas.map((l) => l.contaAtual), borderColor: "#e08e0b", tension: 0.15 },
+        { label: `Conta com BESS${usouMercadoLivre ? " + Mercado Livre" : ""}`, data: linhas.map((l) => l.contaComBess), borderColor: "#1c75bc", tension: 0.15 },
       ],
     },
     options: { responsive: true },
@@ -441,9 +459,9 @@ function exportarPdfBess() {
   linha("Potência recomendada", `${num(bess.potenciaRecomendadaKw, 1)} kW`);
   linha("Capacidade recomendada", `${num(bess.capacidadeFinalKwh, 1)} kWh`);
 
-  titulo("Cenário Ano 1");
+  titulo(`Cenário Ano 1${cenarios.usarMercadoLivre ? " — com migração para Mercado Livre" : " — mercado regulado"}`);
   linha("Conta atual (mês)", brl2(cenarios.linhas[0].contaAtual));
-  linha("Conta com BESS (mês)", brl2(cenarios.linhas[0].contaComBess));
+  linha(`Conta com BESS${cenarios.usarMercadoLivre ? " + Mercado Livre" : ""} (mês)`, brl2(cenarios.linhas[0].contaComBess));
   linha("Economia mensal", brl2(cenarios.economiaMensalAno1));
   linha("Economia anual", brl(cenarios.linhas[0].economiaAnual));
 
@@ -453,14 +471,23 @@ function exportarPdfBess() {
     linha("Payback", cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—");
   } else {
     linha("Modelo", "Assinatura (EaaS) — sem investimento inicial");
-    linha("Mensalidade inicial", brl2(cenarios.linhas[0].mensalidadeEaas));
+    linha("Mensalidade (nominal)", brl2(cenarios.linhas[0].mensalidadeEaasNominal));
+    if (cenarios.lucroReal) {
+      linha("Créditos PIS/COFINS + IRPJ/CSLL", pct(1 - cenarios.fatorCreditoTributario));
+      linha("Mensalidade líquida (Lucro Real)", brl2(cenarios.linhas[0].mensalidadeEaasLiquida));
+    }
   }
   linha(`Economia total (${cenarios.linhas.length} anos)`, brl(cenarios.economiaTotalHorizonte));
 
   y += 5;
   doc.setFontSize(8);
   doc.setTextColor(140, 140, 140);
-  doc.text("Estimativas baseadas em dados informados pelo cliente. A efetividade do BESS em cobrir a energia de ponta decai ao longo da vida útil da bateria. Não substitui análise técnica detalhada.", 14, y, { maxWidth: 182 });
+  doc.text(
+    "Estimativas baseadas em dados informados pelo cliente. A efetividade do BESS em cobrir a energia de ponta decai ao longo da vida útil da bateria. O crédito tributário sobre a mensalidade EaaS (Lucro Real) é uma estimativa e depende do enquadramento fiscal real do cliente — consulte a contabilidade dele antes de apresentar como garantido. Não substitui análise técnica detalhada.",
+    14,
+    y,
+    { maxWidth: 182 }
+  );
 
   doc.save(`proposta-bess-${(cliente || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`);
 }
