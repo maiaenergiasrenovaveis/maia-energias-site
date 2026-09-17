@@ -266,6 +266,34 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
       <div class="grid lg:grid-cols-3 gap-6 mb-6">
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Tarifas</h2>
+          <div class="rounded-lg bg-slate-50 border border-slate-200 p-3 mb-3">
+            <p class="text-[11px] font-semibold text-slate-500 mb-2">Buscar tarifa homologada na ANEEL (preenche ponta/fora ponta/demanda abaixo — exceto Mercado Livre)</p>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <input id="b-aneel-distribuidora" list="lista-distribuidoras-aneel" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" placeholder="Distribuidora" />
+                <datalist id="lista-distribuidoras-aneel"></datalist>
+              </div>
+              <select id="b-aneel-subgrupo" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs">
+                <option value="">Subgrupo</option>
+                <option value="A1">A1</option>
+                <option value="A2">A2</option>
+                <option value="A3">A3</option>
+                <option value="A3a">A3a</option>
+                <option value="A4" selected>A4</option>
+                <option value="A4a">A4a</option>
+                <option value="A4b">A4b</option>
+                <option value="AS">AS</option>
+              </select>
+              <select id="b-aneel-modalidade" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs">
+                <option value="">Modalidade</option>
+                <option value="Convencional">Convencional</option>
+                <option value="Verde" selected>Verde</option>
+                <option value="Azul">Azul (parcial*)</option>
+              </select>
+            </div>
+            <p id="b-aneel-status" class="text-[11px] mt-2 text-slate-400"></p>
+            <p class="text-[10px] text-slate-400 mt-1">*Azul tem demanda diferente na ponta e fora ponta; este simulador usa só uma demanda — confira o valor antes de usar.</p>
+          </div>
           <div class="grid grid-cols-2 gap-2 text-sm">
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa ponta (R$/kWh)</label><input id="b-tarifa-ponta" type="number" step="0.0001" value="3.04" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa fora ponta (R$/kWh)</label><input id="b-tarifa-fora-ponta" type="number" step="0.0001" value="0.62" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>

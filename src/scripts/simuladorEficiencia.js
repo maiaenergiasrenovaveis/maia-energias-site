@@ -14,6 +14,59 @@ const gerarCodigoProposta = (prefixo) => {
   return `${prefixo}-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}-${rand}`;
 };
 
+// ---------- Tarifas homologadas ANEEL (Grupo A) ----------
+let distribuidorasAneelCache = null;
+const datalistsDistribuidorasPreenchidos = new Set();
+
+async function carregarDistribuidorasAneel(datalistId) {
+  if (datalistsDistribuidorasPreenchidos.has(datalistId)) return;
+  datalistsDistribuidorasPreenchidos.add(datalistId);
+  try {
+    if (!distribuidorasAneelCache) {
+      const res = await fetch("/interno/api/aneel-distribuidoras");
+      const data = await res.json();
+      distribuidorasAneelCache = data.distribuidoras ?? [];
+    }
+    const datalist = $(datalistId);
+    const frag = document.createDocumentFragment();
+    distribuidorasAneelCache.forEach((d) => {
+      const opt = document.createElement("option");
+      opt.value = d;
+      frag.appendChild(opt);
+    });
+    datalist.appendChild(frag);
+  } catch {
+    // Lista de distribuidoras é só conveniência (autocomplete) — falha aqui não deve travar nada.
+  }
+}
+
+async function buscarTarifaAneel({ distribuidoraId, subgrupoId, modalidadeId, statusId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId, onDone }) {
+  const distribuidora = $(distribuidoraId).value.trim();
+  const subgrupo = $(subgrupoId).value;
+  const modalidade = $(modalidadeId).value;
+  const status = $(statusId);
+  if (!distribuidora || !subgrupo || !modalidade) return;
+
+  status.textContent = "Buscando na ANEEL...";
+  try {
+    const res = await fetch(`/interno/api/aneel-tarifas?distribuidora=${encodeURIComponent(distribuidora)}&subgrupo=${encodeURIComponent(subgrupo)}&modalidade=${encodeURIComponent(modalidade)}`);
+    const data = await res.json();
+    if (!res.ok) {
+      status.textContent = `Não encontrado — confira o nome da distribuidora (${data.error ?? "erro"}).`;
+      return;
+    }
+    $(tarifaPontaId).value = data.tarifaPonta.toFixed(4);
+    $(tarifaForaPontaId).value = data.tarifaForaPonta.toFixed(4);
+    if (data.tarifaDemanda != null) $(tarifaDemandaId).value = data.tarifaDemanda.toFixed(2);
+    const vigInicio = new Date(data.vigenciaInicio + "T00:00:00").toLocaleDateString("pt-BR");
+    const vigFim = new Date(data.vigenciaFim + "T00:00:00").toLocaleDateString("pt-BR");
+    status.innerHTML = `<span class="text-emerald-600 font-semibold">✓</span> ${data.fonte} — vigência ${vigInicio} a ${vigFim}.`;
+    onDone?.();
+  } catch {
+    status.textContent = "Erro ao buscar na ANEEL — preencha manualmente.";
+  }
+}
+
 // ---------- Seleção de grupo tarifário ----------
 document.querySelectorAll(".grupo-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -585,6 +638,22 @@ function initBess() {
 
   document.querySelectorAll("#painel-bess input, #painel-bess select").forEach((el) => {
     el.addEventListener("input", computeBess);
+  });
+
+  carregarDistribuidorasAneel("lista-distribuidoras-aneel");
+  ["b-aneel-distribuidora", "b-aneel-subgrupo", "b-aneel-modalidade"].forEach((id) => {
+    $(id).addEventListener("change", () =>
+      buscarTarifaAneel({
+        distribuidoraId: "b-aneel-distribuidora",
+        subgrupoId: "b-aneel-subgrupo",
+        modalidadeId: "b-aneel-modalidade",
+        statusId: "b-aneel-status",
+        tarifaPontaId: "b-tarifa-ponta",
+        tarifaForaPontaId: "b-tarifa-fora-ponta",
+        tarifaDemandaId: "b-tarifa-demanda",
+        onDone: computeBess,
+      })
+    );
   });
 
   $("b-export-pdf").addEventListener("click", exportarPdfBess);

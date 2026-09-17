@@ -788,6 +788,86 @@ async function handleIrradiacaoApi(request) {
   });
 }
 
+const ANEEL_RESOURCE_ID = "fcf2906c-7c32-4b9b-a637-054e7a5234f4"; // tarifas-homologadas-distribuidoras-energia-eletrica.csv
+const ANEEL_API = "https://dadosabertos.aneel.gov.br/api/3/action";
+
+// Converte "1.912,96" / "294,98" (formato BR) pra número.
+function parseNumeroBr(s) {
+  if (s == null) return 0;
+  return parseFloat(String(s).replace(/\./g, "").replace(",", ".")) || 0;
+}
+
+// Lista de distribuidoras (SigAgente) pro seletor — cache de 7 dias, muda raramente.
+async function handleAneelDistribuidoras() {
+  const url = `${ANEEL_API}/datastore_search?resource_id=${ANEEL_RESOURCE_ID}&fields=SigAgente&distinct=true&limit=300`;
+  const res = await fetch(url);
+  if (!res.ok) return jsonResponse({ error: "falha ao consultar ANEEL" }, 502);
+  const data = await res.json();
+  const distribuidoras = (data?.result?.records ?? []).map((r) => r.SigAgente).filter(Boolean).sort();
+  return new Response(JSON.stringify({ distribuidoras }), {
+    headers: { "content-type": "application/json", "cache-control": "public, max-age=604800" },
+  });
+}
+
+// Tarifas homologadas (TE+TUSD) de uma distribuidora/subgrupo/modalidade, direto da base
+// aberta da ANEEL. DscDetalhe="Não se aplica" filtra fora tarifas especiais (SCEE = geração
+// distribuída/compensação, APE = autoprodução) que apareceriam misturadas com a tarifa normal
+// se não fosse esse filtro. Pega a vigência mais recente disponível. Cache curto (1 dia): a
+// ANEEL atualiza a base semanalmente e reajustes tarifários entram em vigor a qualquer momento.
+async function handleAneelTarifas(request) {
+  const url = new URL(request.url);
+  const distribuidora = url.searchParams.get("distribuidora");
+  const subgrupo = url.searchParams.get("subgrupo");
+  const modalidade = url.searchParams.get("modalidade");
+  if (!distribuidora || !subgrupo || !modalidade) {
+    return jsonResponse({ error: "informe distribuidora, subgrupo e modalidade" }, 400);
+  }
+
+  const filters = JSON.stringify({
+    SigAgente: distribuidora,
+    DscSubGrupo: subgrupo,
+    DscModalidadeTarifaria: modalidade,
+    DscBaseTarifaria: "Tarifa de Aplicação",
+    DscDetalhe: "Não se aplica",
+  });
+  const aneelUrl =
+    `${ANEEL_API}/datastore_search?resource_id=${ANEEL_RESOURCE_ID}&filters=${encodeURIComponent(filters)}` +
+    `&sort=${encodeURIComponent("DatInicioVigencia desc")}&limit=10`;
+  const res = await fetch(aneelUrl);
+  if (!res.ok) return jsonResponse({ error: "falha ao consultar ANEEL" }, 502);
+  const data = await res.json();
+  const registros = data?.result?.records ?? [];
+  if (!registros.length) return jsonResponse({ error: "nenhuma tarifa encontrada para essa combinação" }, 404);
+
+  // Registros já vêm ordenados pela vigência mais recente primeiro — pega só as linhas
+  // dessa vigência (as demais são histórico).
+  const vigenciaMaisRecente = registros[0].DatInicioVigencia;
+  const atuais = registros.filter((r) => r.DatInicioVigencia === vigenciaMaisRecente);
+
+  const linhaDemanda = atuais.find((r) => r.DscUnidadeTerciaria === "kW");
+  const linhaPonta = atuais.find((r) => r.NomPostoTarifario === "Ponta");
+  const linhaForaPonta = atuais.find((r) => r.NomPostoTarifario === "Fora ponta") ?? atuais.find((r) => r.NomPostoTarifario === "Não se aplica" && r.DscUnidadeTerciaria === "MWh");
+
+  if (!linhaForaPonta) return jsonResponse({ error: "não encontrei a tarifa de energia para essa combinação" }, 404);
+
+  // Valores vêm em R$/MWh — divide por 1000 pra virar R$/kWh.
+  const tarifaForaPonta = (parseNumeroBr(linhaForaPonta.VlrTE) + parseNumeroBr(linhaForaPonta.VlrTUSD)) / 1000;
+  const tarifaPonta = linhaPonta ? (parseNumeroBr(linhaPonta.VlrTE) + parseNumeroBr(linhaPonta.VlrTUSD)) / 1000 : tarifaForaPonta;
+  const tarifaDemanda = linhaDemanda ? parseNumeroBr(linhaDemanda.VlrTUSD) : null;
+
+  return new Response(
+    JSON.stringify({
+      tarifaPonta,
+      tarifaForaPonta,
+      tarifaDemanda,
+      vigenciaInicio: vigenciaMaisRecente,
+      vigenciaFim: atuais[0].DatFimVigencia,
+      fonte: `ANEEL — ${distribuidora} (${subgrupo}/${modalidade})`,
+    }),
+    { headers: { "content-type": "application/json", "cache-control": "public, max-age=86400" } }
+  );
+}
+
 // API de simulações salvas (/interno/api/simulacoes) — banco D1 dedicado
 // (maia-simulador-db), separado do banco do portal de eletropostos para não
 // misturar dados dos dois projetos. Já protegida pelo Basic Auth de /interno/*.
@@ -849,6 +929,26 @@ async function handleFetch(request, env, ctx) {
     return withEdgeCache(request, ctx, async () => {
       try {
         return await handleIrradiacaoApi(request);
+      } catch (err) {
+        return jsonResponse({ error: String(err) }, 500);
+      }
+    });
+  }
+
+  if (url.pathname === "/interno/api/aneel-distribuidoras") {
+    return withEdgeCache(request, ctx, async () => {
+      try {
+        return await handleAneelDistribuidoras();
+      } catch (err) {
+        return jsonResponse({ error: String(err) }, 500);
+      }
+    });
+  }
+
+  if (url.pathname === "/interno/api/aneel-tarifas") {
+    return withEdgeCache(request, ctx, async () => {
+      try {
+        return await handleAneelTarifas(request);
       } catch (err) {
         return jsonResponse({ error: String(err) }, 500);
       }
