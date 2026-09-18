@@ -472,22 +472,10 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
       <div class="grid lg:grid-cols-2 gap-6 mb-6">
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Consumo e demanda projetados (pós-aumento de carga)</h2>
-
-          <p class="text-[11px] font-semibold text-slate-500 mb-2">Demanda: atual + carga nova = contratada</p>
-          <div class="grid grid-cols-2 gap-2 text-sm mb-3">
-            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Demanda atual (kW)</label><input id="m-demanda-atual" type="number" step="0.1" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
-          </div>
-          <div id="m-demanda-jogo" class="grid grid-cols-3 gap-2 mb-3"></div>
-          <p class="text-[10px] text-slate-400 mb-3">"Carga nova" usa a Potência do carregador informada no card de Investimento, abaixo.</p>
-
           <div class="grid grid-cols-2 gap-2 text-sm">
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Energia ponta (kWh/mês)</label><input id="m-energia-ponta" type="number" value="1500" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Energia fora ponta (kWh/mês)</label><input id="m-energia-fora-ponta" type="number" value="13500" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
-            <div>
-              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Nova demanda contratada (kW)</label>
-              <input id="m-demanda" type="number" value="100" readonly class="w-full rounded-lg border border-slate-300 bg-slate-50 px-2 py-1.5 text-sm text-slate-500" />
-              <p class="text-[10px] text-slate-400 mt-1">Calculada automaticamente (atual + carga nova, acima) — este é o valor efetivo usado no cálculo.</p>
-            </div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Nova demanda contratada (kW)</label><input id="m-demanda" type="number" value="100" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Reativo excedente (R$/mês)</label><input id="m-reativo" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Iluminação púb. (R$/mês)</label><input id="m-iluminacao" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Outros (R$/mês)</label><input id="m-outros" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>

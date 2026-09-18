@@ -1188,19 +1188,6 @@ function computeMigracao() {
     return;
   }
 
-  // Demanda contratada = demanda atual + potência da carga nova (o carregador, na prática) —
-  // calculada, não digitada, pra evitar que o valor usado no cálculo fique dessincronizado da
-  // soma das duas partes que o compõem.
-  const demandaAtual = Number($("m-demanda-atual").value) || 0;
-  const demandaCargaNova = Number($("m-carga-potencia").value) || 0;
-  const demandaTotal = demandaAtual + demandaCargaNova;
-  $("m-demanda").value = demandaTotal;
-  $("m-demanda-jogo").innerHTML = `
-    ${cardHtml("Demanda atual", `${num(demandaAtual, 1)} kW`)}
-    ${cardHtml("+ Carga nova", `${num(demandaCargaNova, 1)} kW`)}
-    ${cardHtml("= Demanda contratada", `${num(demandaTotal, 1)} kW`)}
-  `;
-
   const investimento = calcularInvestimentoMigracao({
     transformador: Number($("m-transformador").value) || 0,
     obraCivil: Number($("m-obra-civil").value) || 0,
