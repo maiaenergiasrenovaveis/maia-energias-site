@@ -1259,6 +1259,8 @@ async function exportarPdfMigracao() {
   const l1 = cenarios.linhas[0];
   const cargaTipo = $("m-carga-tipo").value === "Outro" ? $("m-carga-outro").value || "Carga" : $("m-carga-tipo").value;
   const temCarga = investimento.cargaValor > 0;
+  const cargaPotencia = Number($("m-carga-potencia").value) || 0;
+  const transformadorPotencia = Number($("m-transformador-potencia").value) || 0;
 
   const diagnostico = [
     `Consumo atual (Grupo B, baixa tensão): ${num(Number($("m-consumo-atual").value), 0)} kWh/mês, sem demanda contratada.`,
@@ -1270,8 +1272,8 @@ async function exportarPdfMigracao() {
 
   const escopo = [
     `Migração da unidade consumidora de Grupo B para Grupo A (alta tensão), com nova demanda contratada de ${num(Number($("m-demanda").value), 0)} kW.`,
-    "Construção de subestação/cabine primária própria: transformador, obra civil, projeto elétrico/ART, medição e proteção, e conexão junto à distribuidora.",
-    temCarga ? `Fornecimento e instalação de ${cargaTipo.toLowerCase()}, preço final incluso no investimento total desta proposta.` : null,
+    `Construção de subestação/cabine primária própria: transformador${transformadorPotencia > 0 ? ` de ${num(transformadorPotencia, 0)} kVA` : ""}, obra civil, projeto elétrico/ART, medição e proteção, e conexão junto à distribuidora.`,
+    temCarga ? `Fornecimento e instalação de ${cargaTipo.toLowerCase()}${cargaPotencia > 0 ? ` de ${num(cargaPotencia, 1)} kW` : ""}, preço final incluso no investimento total desta proposta.` : null,
     `Comparação de tarifas no mesmo nível de consumo projetado: Grupo B ficaria em ${brl2(l1.contaGrupoBProjetada)}/mês, Grupo A${mlSufixo} em ${brl2(l1.contaGrupoAProjetada)}/mês.`,
   ].filter(Boolean);
 
