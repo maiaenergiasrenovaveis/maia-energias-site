@@ -1290,7 +1290,7 @@ async function exportarPdfMigracao() {
   ];
 
   await gerarPropostaPdf({
-    subtitulo: `Migração Grupo B → Grupo A${mlSufixo}`,
+    subtitulo: `Migração Grupo B para Grupo A${mlSufixo}`,
     codigoProposta: $("m-proposta-codigo").value || "—",
     cliente,
     responsavelNome: $("m-responsavel-nome").value,
