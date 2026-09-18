@@ -410,39 +410,25 @@ async function imagemArquivoParaBase64(file) {
 }
 
 // PDFs de conta variam muito sobre em qual página fica o "Histórico de consumo" (às vezes é
-// a 1ª, às vezes o verso) — em vez de adivinhar, renderiza até 2 páginas e empilha tudo numa
-// imagem só (o modelo de visão da Workers AI só aceita 1 imagem por chamada), pra ele procurar
-// os dados em qualquer uma das páginas.
-async function pdfArquivoParaImagemUnicaBase64(file, maxPaginas = 2) {
+// a 1ª, às vezes o verso) — em vez de adivinhar, renderiza até 3 páginas como imagens e manda
+// todas juntas pro modelo (GPT-4o-mini aceita várias imagens por chamada nativamente), que
+// procura os dados em qualquer uma delas.
+async function pdfArquivoParaImagensBase64(file, maxPaginas = 3) {
   const buffer = await file.arrayBuffer();
   const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+  const imagens = [];
   const totalPaginas = Math.min(pdf.numPages, maxPaginas);
-  const canvasPaginas = [];
   for (let i = 1; i <= totalPaginas; i++) {
     const page = await pdf.getPage(i);
     const viewportBase = page.getViewport({ scale: 1 });
-    const viewport = page.getViewport({ scale: 1200 / Math.max(viewportBase.width, viewportBase.height) });
+    const viewport = page.getViewport({ scale: 1400 / Math.max(viewportBase.width, viewportBase.height) });
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-    canvasPaginas.push(canvas);
+    imagens.push(canvas.toDataURL("image/jpeg", 0.85).split(",")[1]);
   }
-
-  const larguraFinal = Math.max(...canvasPaginas.map((c) => c.width));
-  const alturaFinal = canvasPaginas.reduce((soma, c) => soma + c.height, 0);
-  const combinado = document.createElement("canvas");
-  combinado.width = larguraFinal;
-  combinado.height = alturaFinal;
-  const ctx = combinado.getContext("2d");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, larguraFinal, alturaFinal);
-  let y = 0;
-  for (const c of canvasPaginas) {
-    ctx.drawImage(c, 0, y);
-    y += c.height;
-  }
-  return combinado.toDataURL("image/jpeg", 0.8).split(",")[1];
+  return imagens;
 }
 
 async function escanearContaEnergia() {
@@ -454,11 +440,11 @@ async function escanearContaEnergia() {
   }
   status.textContent = "Lendo a conta (pode levar alguns segundos)...";
   try {
-    const imageBase64 = arquivo.type === "application/pdf" ? await pdfArquivoParaImagemUnicaBase64(arquivo) : await imagemArquivoParaBase64(arquivo);
+    const imagesBase64 = arquivo.type === "application/pdf" ? await pdfArquivoParaImagensBase64(arquivo) : [await imagemArquivoParaBase64(arquivo)];
     const res = await fetch("/interno/api/scan-conta", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ image: imageBase64, mimeType: "image/jpeg" }),
+      body: JSON.stringify({ images: imagesBase64.map((base64) => ({ base64, mimeType: "image/jpeg" })) }),
     });
     const data = await res.json();
     if (!res.ok) {

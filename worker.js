@@ -881,12 +881,11 @@ async function handleAneelTarifas(request) {
   );
 }
 
-// Escaneia uma foto/print da conta de energia via Workers AI (visão) para extrair o histórico
-// de consumo mensal e alguns dados do cliente, evitando digitação manual. Roda dentro da rede
-// da própria Cloudflare — sem chave externa, sem chamada de saída.
+// Escaneia uma foto/print da conta de energia para extrair o histórico de consumo mensal e
+// alguns dados do cliente, evitando digitação manual.
 // Sem cache: cada conta é um documento pessoal do cliente, não um dado de referência público
 // como os de irradiação/ANEEL acima — nunca deve ficar guardada na borda da Cloudflare.
-const PROMPT_SCAN_CONTA = `Você extrai dados estruturados de contas de energia elétrica brasileiras (Enel, CPFL, Light, Cemig, Copel, Celesc etc), de clientes do Grupo B (baixa tensão, tarifa única por kWh, sem demanda contratada). A imagem pode conter mais de uma página da mesma conta, empilhadas verticalmente (o "Histórico de consumo" e a tabela de tributos às vezes ficam na 1ª página, às vezes no verso) — procure os dados em toda a imagem. Retorne APENAS um JSON (sem markdown, sem texto extra) no formato:
+const PROMPT_SCAN_CONTA = `Você extrai dados estruturados de contas de energia elétrica brasileiras (Enel, CPFL, Light, Cemig, Copel, Celesc etc), de clientes do Grupo B (baixa tensão, tarifa única por kWh, sem demanda contratada). Pode receber mais de uma imagem — são páginas da mesma conta (o "Histórico de consumo" e a tabela de tributos às vezes ficam na 1ª página, às vezes no verso) — procure os dados em todas elas. Retorne APENAS um JSON (sem markdown, sem texto extra) no formato:
 {
   "cliente": string ou null (o NOME DA EMPRESA OU PESSOA titular da unidade consumidora — geralmente a primeira linha em destaque no bloco de identificação do cliente, muitas vezes com "LTDA", "ME", "EIRELI" ou similar. NÃO é o nome do bairro, rua ou cidade que aparece na linha de endereço logo abaixo — cuidado pra não confundir os dois),
   "cidade": string ou null (cidade do endereço de fornecimento, sem UF),
@@ -902,46 +901,55 @@ const PROMPT_SCAN_CONTA = `Você extrai dados estruturados de contas de energia 
 }
 Se um campo não estiver visível ou você não tiver certeza, use null (para historico_consumo, use um array vazio). Não invente valores. IMPORTANTE: sua resposta inteira deve ser SOMENTE o objeto JSON — comece direto com "{" e termine com "}". Não escreva nenhuma frase de introdução, explicação, análise ou comentário antes ou depois do JSON.`;
 
-// Roda dentro da rede da própria Cloudflare (binding env.AI, não um fetch() de saída) — depois
-// de uma sessão inteira de diagnóstico (chave sem espaço, retry, timeout, User-Agent de
-// navegador, AI Gateway da própria Cloudflare, hospedar a imagem numa URL em vez de embutir)
-// confirmando que TODO tráfego deste Worker pra api.openai.com estava sendo bloqueado antes de
-// chegar lá (0 requisições no dashboard de uso da OpenAI, mesmo pra chamadas de texto puro),
-// migrado de GPT-4o-mini pra este modelo — sem chamada de saída, não tem como sofrer esse tipo
-// de bloqueio de rede. Único parâmetro do modelo é `image` como array de bytes 0-255 (formato
-// documentado da Workers AI) e só aceita 1 imagem por vez — por isso o front-end combina as
-// páginas do PDF numa imagem só (empilhadas verticalmente) antes de enviar.
+// GPT-4o-mini via um relay hospedado na Vercel (projeto separado: maia-scan-proxy), não mais
+// direto da Cloudflare nem via Workers AI. Motivo: uma sessão inteira de diagnóstico (chave sem
+// espaço, retry, timeout, User-Agent de navegador, AI Gateway da própria Cloudflare, hospedar a
+// imagem numa URL em vez de embutir) confirmou que TODO tráfego deste Worker pra api.openai.com
+// era bloqueado antes de chegar lá (0 requisições no dashboard de uso da OpenAI, até pra chamadas
+// de texto puro) — provavelmente as faixas de IP de saída da Cloudflare Workers bloqueadas pela
+// OpenAI. O Workers AI (modelo Llama 3.2 11B, rodando dentro da rede da Cloudflare) contornava o
+// bloqueio mas não tinha precisão suficiente pra ler uma tabela tarifária densa. A Vercel roda em
+// outra rede — sem esse bloqueio — e o relay lá só injeta a chave da OpenAI (que fica só nas env
+// vars da Vercel) e repassa; o prompt e toda a lógica de negócio continuam aqui.
+const VERCEL_RELAY_URL = "https://maia-scan-proxy.vercel.app/api/scan-conta";
+
 async function handleScanConta(request, env) {
+  if (!env.RELAY_SECRET) return jsonResponse({ error: "Leitura automática não configurada (falta RELAY_SECRET)." }, 500);
+
   const body = await request.json().catch(() => null);
-  if (!body?.image || !/^image\/(png|jpe?g|webp)$/.test(body?.mimeType ?? "")) {
-    return jsonResponse({ error: "envie image (base64) e mimeType (PNG, JPG ou WEBP)" }, 400);
+  const imagens = Array.isArray(body?.images) ? body.images : [];
+  if (!imagens.length) return jsonResponse({ error: "envie ao menos uma imagem em images" }, 400);
+  if (imagens.length > 3) return jsonResponse({ error: "no máximo 3 páginas/imagens por vez" }, 400);
+  for (const img of imagens) {
+    if (!img?.base64 || !/^image\/(png|jpe?g|webp)$/.test(img.mimeType ?? "")) {
+      return jsonResponse({ error: "cada imagem precisa de base64 e mimeType (PNG, JPG ou WEBP)" }, 400);
+    }
+    // ~5.5MB em base64 ≈ 4MB de imagem original — o front-end já redimensiona antes de enviar,
+    // isso aqui é só uma trava de segurança contra payloads fora do esperado.
+    if (img.base64.length > 5.5 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~4MB por página)" }, 400);
   }
-  // ~7.5MB em base64 ≈ 5.5MB de imagem original — o front-end já redimensiona/combina páginas
-  // antes de enviar, isso aqui é só uma trava de segurança contra payloads fora do esperado.
-  if (body.image.length > 7.5 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~5.5MB)" }, 400);
 
-  const bytes = Uint8Array.from(atob(body.image), (c) => c.charCodeAt(0));
-
-  let resultado;
+  let texto;
   try {
-    resultado = await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
-      image: Array.from(bytes),
-      prompt: PROMPT_SCAN_CONTA,
-      max_tokens: 2048,
-      temperature: 0.15, // extração factual, não geração criativa — baixo pra reduzir alucinação/inconsistência
+    const res = await fetch(VERCEL_RELAY_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-relay-secret": env.RELAY_SECRET },
+      body: JSON.stringify({ images: imagens, prompt: PROMPT_SCAN_CONTA }),
     });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      console.error("scan-conta: relay respondeu com erro", { status: res.status, corpo: data });
+      return jsonResponse({ error: `falha no relay (${res.status}): ${data?.error ?? "erro desconhecido"}` }, 502);
+    }
+    texto = data?.content;
   } catch (err) {
-    return jsonResponse({ error: `falha ao consultar o modelo de visão: ${String(err)}` }, 502);
+    return jsonResponse({ error: `falha ao chamar o relay: ${String(err)}` }, 502);
   }
 
-  const texto = resultado?.response;
   if (!texto) return jsonResponse({ error: "resposta vazia do modelo" }, 502);
 
-  // Diferente do GPT-4o-mini (que tinha response_format:json_object garantindo só JSON), este
-  // modelo às vezes insiste em explicar em texto corrido antes/depois do JSON mesmo sendo
-  // instruído a não fazer isso. Em vez de depender só da instrução, extrai o trecho entre a
-  // primeira "{" e a última "}" da resposta — funciona tanto pra "aqui está: {...}" quanto pra
-  // respostas com um parágrafo inteiro antes do JSON de verdade.
+  // GPT-4o-mini com response_format:json_object quase sempre devolve só JSON, mas mantém a
+  // mesma extração robusta (em vez de confiar 100% nisso) por segurança.
   const inicio = texto.indexOf("{");
   const fim = texto.lastIndexOf("}");
   const trechoJson = inicio >= 0 && fim > inicio ? texto.slice(inicio, fim + 1) : texto;
