@@ -1,5 +1,5 @@
 import { MESES, calcularDimensionamento, calcularAreaModulos, calcularModulosQueCabem, calcularCapex, calcularContaMes1, calcularPayback } from "../lib/dimensionamentoSolar.js";
-import { calcularBESS, calcularCenariosGrupoA } from "../lib/dimensionamentoBESS.js";
+import { calcularBESS, calcularCenariosGrupoA, calcularEscadaReducoesGrupoA } from "../lib/dimensionamentoBESS.js";
 import { calcularInvestimentoMigracao, calcularCenariosMigracao } from "../lib/migracaoGrupoA.js";
 import { calcularDimensionamentoEletrico, MATERIAIS_CONDUTOR as MATERIAIS_CONDUTOR_LABEL } from "../lib/dimensionamentoEletrico.js";
 import { gerarPropostaPdf, gerarDatasheetPdf } from "./pdfProposta.js";
@@ -882,6 +882,7 @@ async function exportarPdfSolar() {
 // ============================================================
 let bessInited = false;
 let chartConta;
+let chartEscada;
 let ultimoResultadoBess = null;
 
 function initBess() {
@@ -1017,7 +1018,23 @@ function computeBess() {
     ipca: Number($("b-ipca").value) / 100,
   });
 
-  ultimoResultadoBess = { bess, cenarios, modoAquisicao };
+  const escada = calcularEscadaReducoesGrupoA({
+    energiaPontaKwh: consumoPontaMensal,
+    energiaForaPontaKwh: Number($("b-energia-fora-ponta").value) || 0,
+    demandaContratadaKw: Number($("b-demanda").value) || 0,
+    demandaContratadaKwPosBess: Number($("b-demanda-pos").value) || 0,
+    tarifaPonta: Number($("b-tarifa-ponta").value) || 0,
+    tarifaForaPonta: Number($("b-tarifa-fora-ponta").value) || 0,
+    tarifaDemanda: Number($("b-tarifa-demanda").value) || 0,
+    reativoExcedente: Number($("b-reativo").value) || 0,
+    iluminacaoPublica: Number($("b-iluminacao").value) || 0,
+    outros: Number($("b-outros").value) || 0,
+    usarMercadoLivre: $("b-usar-ml").checked,
+    tarifaMercadoLivre: Number($("b-tarifa-ml").value) || null,
+    tarifaTusd: Number($("b-tarifa-tusd").value) || 0,
+  });
+
+  ultimoResultadoBess = { bess, cenarios, escada, modoAquisicao };
 
   const l1 = cenarios.linhas[0];
   const cards = [
@@ -1039,6 +1056,62 @@ function computeBess() {
   $("b-result-cards").innerHTML = cards.join("");
 
   renderChartConta(cenarios.linhas, cenarios.usarMercadoLivre);
+  renderChartEscada(escada.passos);
+}
+
+function renderChartEscada(passos) {
+  const ctx = $("b-chart-escada");
+  if (chartEscada) chartEscada.destroy();
+
+  // Gráfico de "escadinha" (waterfall) simulado com barras empilhadas: um dataset "base"
+  // invisível que posiciona o piso de cada barra, e um dataset "valor" visível por cima.
+  // O primeiro e o último passo são barras cheias (do zero); os passos intermediários são
+  // barras "flutuantes" mostrando só a redução daquele passo específico.
+  const n = passos.length;
+  const base = passos.map((p, i) => {
+    if (i === 0 || i === n - 1) return 0;
+    return Math.min(passos[i - 1].total, p.total);
+  });
+  const valor = passos.map((p, i) => {
+    if (i === 0 || i === n - 1) return p.total;
+    return Math.abs(passos[i - 1].total - p.total);
+  });
+  const cores = passos.map((p, i) => (i === 0 ? "#e08e0b" : i === n - 1 ? "#1c75bc" : "#2f9e44"));
+
+  chartEscada = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: passos.map((p) => p.label),
+      datasets: [
+        { label: "base", data: base, backgroundColor: "rgba(0,0,0,0)", stack: "s" },
+        {
+          label: "Custo mensal (R$)",
+          data: valor,
+          backgroundColor: cores,
+          stack: "s",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx2) => {
+              if (ctx2.dataset.label === "base") return null;
+              const passo = passos[ctx2.dataIndex];
+              const primeiro = ctx2.dataIndex === 0;
+              const ultimo = ctx2.dataIndex === passos.length - 1;
+              if (primeiro || ultimo) return `${brl2(passo.total)}/mês`;
+              return `− ${brl2(passo.reducao)}/mês (total: ${brl2(passo.total)})`;
+            },
+          },
+        },
+      },
+      scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: (v) => brl(v) } } },
+    },
+  });
 }
 
 function renderChartConta(linhas, usouMercadoLivre) {
@@ -1061,7 +1134,7 @@ function renderChartConta(linhas, usouMercadoLivre) {
 
 async function exportarPdfBess() {
   if (!ultimoResultadoBess) return;
-  const { bess, cenarios, modoAquisicao } = ultimoResultadoBess;
+  const { bess, cenarios, escada, modoAquisicao } = ultimoResultadoBess;
   const cliente = $("b-cliente").value || "Cliente";
   const mlSufixo = cenarios.usarMercadoLivre ? " + Mercado Livre" : "";
 
@@ -1114,6 +1187,16 @@ async function exportarPdfBess() {
     escopo,
     tabelaFinanceira,
     graficoCanvas: $("b-chart-conta"),
+    graficoSecundario: $("b-chart-escada"),
+    tabelaSecundaria: {
+      titulo: "Escadinha de reduções — de onde vem a economia mensal",
+      head: ["Passo", "Redução no passo", "Custo mensal acumulado"],
+      body: escada.passos.map((p, i) =>
+        i === 0 || i === escada.passos.length - 1
+          ? [p.label, "—", brl2(p.total)]
+          : [p.label, `− ${brl2(p.reducao)}`, brl2(p.total)]
+      ),
+    },
     investimentoTotal: modoAquisicao === "capex" ? cenarios.investimento : 0,
     formaPagamento: modoAquisicao === "capex" ? $("b-forma-pagamento").value : "Assinatura mensal (EaaS) — sem investimento inicial",
     prazoExecucaoDias: $("b-prazo-execucao").value || "—",

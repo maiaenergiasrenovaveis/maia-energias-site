@@ -195,6 +195,81 @@ export function calcularCenariosGrupoA(p) {
 }
 
 /**
+ * Decompõe a economia do Grupo A em passos sucessivos ("escadinha"), na ordem em que as
+ * reduções normalmente acontecem no projeto: 1) ajuste da demanda contratada (peak shaving
+ * reduz o pico, permitindo contratar uma demanda menor), 2) zerar o consumo de energia
+ * comprado da distribuidora no horário de ponta (o BESS cobre esse consumo por completo,
+ * não só uma fração), 3) migração para o Mercado Livre (se marcada). Cada passo usa as
+ * tarifas do ano 1 (sem reajuste), pra bater com contaAtual/contaComBess de linhas[0] em
+ * calcularCenariosGrupoA — é só outra forma de olhar pro mesmo número, não um cálculo paralelo.
+ */
+export function calcularEscadaReducoesGrupoA(p) {
+  const base = {
+    demandaContratadaKw: p.demandaContratadaKw,
+    tarifaDemanda: p.tarifaDemanda,
+    reativoExcedente: p.reativoExcedente ?? 0,
+    iluminacaoPublica: p.iluminacaoPublica ?? 0,
+    outros: p.outros ?? 0,
+  };
+  const usarMercadoLivre = !!(p.usarMercadoLivre && p.tarifaMercadoLivre != null);
+  const demandaPosBess = p.demandaContratadaKwPosBess ?? p.demandaContratadaKw;
+
+  const atual = calcularContaGrupoA({
+    ...base,
+    energiaPontaKwh: p.energiaPontaKwh,
+    energiaForaPontaKwh: p.energiaForaPontaKwh,
+    tarifaPonta: p.tarifaPonta,
+    tarifaForaPonta: p.tarifaForaPonta,
+    mercadoLivre: false,
+  });
+
+  const comDemandaAjustada = calcularContaGrupoA({
+    ...base,
+    demandaContratadaKw: demandaPosBess,
+    energiaPontaKwh: p.energiaPontaKwh,
+    energiaForaPontaKwh: p.energiaForaPontaKwh,
+    tarifaPonta: p.tarifaPonta,
+    tarifaForaPonta: p.tarifaForaPonta,
+    mercadoLivre: false,
+  });
+
+  const comPontaZerada = calcularContaGrupoA({
+    ...base,
+    demandaContratadaKw: demandaPosBess,
+    energiaPontaKwh: 0,
+    energiaForaPontaKwh: p.energiaForaPontaKwh,
+    tarifaPonta: p.tarifaPonta,
+    tarifaForaPonta: p.tarifaForaPonta,
+    mercadoLivre: false,
+  });
+
+  const comMercadoLivre = usarMercadoLivre
+    ? calcularContaGrupoA({
+        ...base,
+        demandaContratadaKw: demandaPosBess,
+        energiaPontaKwh: 0,
+        energiaForaPontaKwh: p.energiaForaPontaKwh,
+        tarifaMercadoLivre: p.tarifaMercadoLivre,
+        tarifaTusd: p.tarifaTusd ?? 0,
+        mercadoLivre: true,
+      })
+    : null;
+
+  const passos = [
+    { label: "Atual", total: atual.total },
+    { label: "Ajuste de demanda", total: comDemandaAjustada.total, reducao: atual.total - comDemandaAjustada.total },
+    { label: "Zerar consumo na ponta", total: comPontaZerada.total, reducao: comDemandaAjustada.total - comPontaZerada.total },
+  ];
+  if (comMercadoLivre) {
+    passos.push({ label: "Migração para o Mercado Livre", total: comMercadoLivre.total, reducao: comPontaZerada.total - comMercadoLivre.total });
+  }
+  const final = passos[passos.length - 1];
+  passos.push({ label: "Final", total: final.total });
+
+  return { passos, usarMercadoLivre, reducaoTotal: atual.total - final.total };
+}
+
+/**
  * Comparação de formas de aquisição (aba "Table Data"): à vista, leasing, leasing com benefício tributário.
  * @param {number} investimentoAVista - R$
  * @param {number} economiaMensalBruta - R$/mês
