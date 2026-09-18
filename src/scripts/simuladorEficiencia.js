@@ -1094,6 +1094,7 @@ function renderChartEscada(passos) {
     },
     options: {
       responsive: true,
+      layout: { padding: { top: 24 } },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -1111,6 +1112,30 @@ function renderChartEscada(passos) {
       },
       scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: (v) => brl(v) } } },
     },
+    // Escreve o valor de cada barra diretamente no gráfico (não só no tooltip), porque a
+    // exportação em PDF captura o canvas como imagem estática — sem isso, os números de
+    // redução de cada passo só apareceriam passando o mouse, e sumiriam na proposta impressa.
+    plugins: [
+      {
+        id: "escadaLabels",
+        afterDatasetsDraw(chart) {
+          const meta = chart.getDatasetMeta(1);
+          const { ctx: c } = chart;
+          c.save();
+          c.font = "bold 11px Arial, sans-serif";
+          c.textAlign = "center";
+          c.fillStyle = "#1e293b";
+          meta.data.forEach((bar, i) => {
+            const passo = passos[i];
+            const primeiro = i === 0;
+            const ultimo = i === passos.length - 1;
+            const texto = primeiro || ultimo ? brl(passo.total) : `− ${brl(passo.reducao)}`;
+            c.fillText(texto, bar.x, bar.y - 8);
+          });
+          c.restore();
+        },
+      },
+    ],
   });
 }
 
