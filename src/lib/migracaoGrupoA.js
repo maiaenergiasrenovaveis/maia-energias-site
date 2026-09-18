@@ -27,7 +27,10 @@ export function calcularContaGrupoB(c) {
 
 /**
  * Investimento de infraestrutura para migrar de Grupo B para Grupo A: subestação/cabine
- * primária própria, transformador, projeto e conexão junto à distribuidora.
+ * primária própria, transformador, projeto e conexão junto à distribuidora — mais o
+ * equipamento que motivou o aumento de carga em si (na prática, quase sempre um carregador
+ * veicular), já com instalação incluída (preço final/turnkey), pra a proposta cobrir o
+ * investimento completo (subestação + carregador), não só a parte de conexão.
  */
 export function calcularInvestimentoMigracao(c) {
   const transformador = c.transformador ?? 0;
@@ -36,8 +39,9 @@ export function calcularInvestimentoMigracao(c) {
   const medicaoProtecao = c.medicaoProtecao ?? 0;
   const taxaDistribuidora = c.taxaDistribuidora ?? 0;
   const outros = c.outros ?? 0;
-  const total = transformador + obraCivil + projetoArt + medicaoProtecao + taxaDistribuidora + outros;
-  return { transformador, obraCivil, projetoArt, medicaoProtecao, taxaDistribuidora, outros, total };
+  const cargaValor = c.cargaValor ?? 0;
+  const total = transformador + obraCivil + projetoArt + medicaoProtecao + taxaDistribuidora + outros + cargaValor;
+  return { transformador, obraCivil, projetoArt, medicaoProtecao, taxaDistribuidora, outros, cargaValor, total };
 }
 
 /**

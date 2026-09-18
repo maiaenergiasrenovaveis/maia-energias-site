@@ -410,13 +410,14 @@ async function imagemArquivoParaBase64(file) {
 }
 
 // PDFs de conta variam muito sobre em qual página fica o "Histórico de consumo" (às vezes é
-// a 1ª, às vezes o verso) — em vez de adivinhar, renderiza até 3 páginas como imagens e manda
-// todas juntas pro modelo, que procura os dados em qualquer uma delas.
-async function pdfArquivoParaImagensBase64(file, maxPaginas = 2) {
+// a 1ª, às vezes o verso) — em vez de adivinhar, renderiza até 2 páginas e empilha tudo numa
+// imagem só (o modelo de visão da Workers AI só aceita 1 imagem por chamada), pra ele procurar
+// os dados em qualquer uma das páginas.
+async function pdfArquivoParaImagemUnicaBase64(file, maxPaginas = 2) {
   const buffer = await file.arrayBuffer();
   const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
-  const imagens = [];
   const totalPaginas = Math.min(pdf.numPages, maxPaginas);
+  const canvasPaginas = [];
   for (let i = 1; i <= totalPaginas; i++) {
     const page = await pdf.getPage(i);
     const viewportBase = page.getViewport({ scale: 1 });
@@ -425,9 +426,23 @@ async function pdfArquivoParaImagensBase64(file, maxPaginas = 2) {
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-    imagens.push(canvas.toDataURL("image/jpeg", 0.8).split(",")[1]);
+    canvasPaginas.push(canvas);
   }
-  return imagens;
+
+  const larguraFinal = Math.max(...canvasPaginas.map((c) => c.width));
+  const alturaFinal = canvasPaginas.reduce((soma, c) => soma + c.height, 0);
+  const combinado = document.createElement("canvas");
+  combinado.width = larguraFinal;
+  combinado.height = alturaFinal;
+  const ctx = combinado.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, larguraFinal, alturaFinal);
+  let y = 0;
+  for (const c of canvasPaginas) {
+    ctx.drawImage(c, 0, y);
+    y += c.height;
+  }
+  return combinado.toDataURL("image/jpeg", 0.8).split(",")[1];
 }
 
 async function escanearContaEnergia() {
@@ -439,11 +454,11 @@ async function escanearContaEnergia() {
   }
   status.textContent = "Lendo a conta (pode levar alguns segundos)...";
   try {
-    const imagesBase64 = arquivo.type === "application/pdf" ? await pdfArquivoParaImagensBase64(arquivo) : [await imagemArquivoParaBase64(arquivo)];
+    const imageBase64 = arquivo.type === "application/pdf" ? await pdfArquivoParaImagemUnicaBase64(arquivo) : await imagemArquivoParaBase64(arquivo);
     const res = await fetch("/interno/api/scan-conta", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ images: imagesBase64.map((base64) => ({ base64, mimeType: "image/jpeg" })) }),
+      body: JSON.stringify({ image: imageBase64, mimeType: "image/jpeg" }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -1117,6 +1132,11 @@ function initMigracao() {
     computeMigracao();
   });
 
+  $("m-carga-tipo").addEventListener("change", () => {
+    $("m-carga-outro-wrap").classList.toggle("hidden", $("m-carga-tipo").value !== "Outro");
+    computeMigracao();
+  });
+
   document.querySelectorAll("#painel-migracao input, #painel-migracao select").forEach((el) => {
     el.addEventListener("input", computeMigracao);
   });
@@ -1175,6 +1195,7 @@ function computeMigracao() {
     medicaoProtecao: Number($("m-medicao-protecao").value) || 0,
     taxaDistribuidora: Number($("m-taxa-distribuidora").value) || 0,
     outros: Number($("m-investimento-outros").value) || 0,
+    cargaValor: Number($("m-carga-valor").value) || 0,
   });
   $("m-out-investimento").textContent = brl(investimento.total);
 
@@ -1236,10 +1257,12 @@ async function exportarPdfMigracao() {
   const cliente = $("m-cliente").value || "Cliente";
   const mlSufixo = cenarios.usarMercadoLivre ? " + Mercado Livre" : "";
   const l1 = cenarios.linhas[0];
+  const cargaTipo = $("m-carga-tipo").value === "Outro" ? $("m-carga-outro").value || "Carga" : $("m-carga-tipo").value;
+  const temCarga = investimento.cargaValor > 0;
 
   const diagnostico = [
     `Consumo atual (Grupo B, baixa tensão): ${num(Number($("m-consumo-atual").value), 0)} kWh/mês, sem demanda contratada.`,
-    `Com o aumento de carga projetado, o consumo passa a ${num(cenarios.consumoProjetadoTotal, 0)} kWh/mês (${num(Number($("m-energia-ponta").value), 0)} kWh na ponta + ${num(Number($("m-energia-fora-ponta").value), 0)} kWh fora ponta) e demanda de ${num(Number($("m-demanda").value), 0)} kW — acima do que a ligação em baixa tensão comporta com bom custo-benefício.`,
+    `Com o aumento de carga projetado${temCarga ? ` (motivado por ${cargaTipo.toLowerCase()})` : ""}, o consumo passa a ${num(cenarios.consumoProjetadoTotal, 0)} kWh/mês (${num(Number($("m-energia-ponta").value), 0)} kWh na ponta + ${num(Number($("m-energia-fora-ponta").value), 0)} kWh fora ponta) e demanda de ${num(Number($("m-demanda").value), 0)} kW — acima do que a ligação em baixa tensão comporta com bom custo-benefício.`,
     cenarios.usarMercadoLivre
       ? "Cenário já considera a migração para o Mercado Livre de Energia junto com a mudança de grupo tarifário."
       : "Cenário calculado no mercado regulado (ACR); o Mercado Livre pode ampliar a economia (ver observações).",
@@ -1248,8 +1271,9 @@ async function exportarPdfMigracao() {
   const escopo = [
     `Migração da unidade consumidora de Grupo B para Grupo A (alta tensão), com nova demanda contratada de ${num(Number($("m-demanda").value), 0)} kW.`,
     "Construção de subestação/cabine primária própria: transformador, obra civil, projeto elétrico/ART, medição e proteção, e conexão junto à distribuidora.",
+    temCarga ? `Fornecimento e instalação de ${cargaTipo.toLowerCase()}, preço final incluso no investimento total desta proposta.` : null,
     `Comparação de tarifas no mesmo nível de consumo projetado: Grupo B ficaria em ${brl2(l1.contaGrupoBProjetada)}/mês, Grupo A${mlSufixo} em ${brl2(l1.contaGrupoAProjetada)}/mês.`,
-  ];
+  ].filter(Boolean);
 
   const tabelaFinanceira = [
     ["Conta atual (Grupo B, consumo de hoje)", brl2(cenarios.contaAtualGrupoB.total)],
@@ -1257,8 +1281,10 @@ async function exportarPdfMigracao() {
     [`Conta Grupo A no consumo projetado${mlSufixo}`, brl2(l1.contaGrupoAProjetada)],
     [l1.economiaMensal >= 0 ? "Economia mensal com a migração" : "Custo extra mensal da migração", brl2(Math.abs(l1.economiaMensal))],
     [`Resultado total (${cenarios.linhas.length} anos)`, brl(cenarios.economiaTotalHorizonte)],
-    ["Investimento de conexão (subestação)", brl(investimento.total)],
-    ["Payback do investimento de conexão", cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—"],
+    ...(temCarga ? [[`${cargaTipo} (fornecimento + instalação)`, brl(investimento.cargaValor)]] : []),
+    ["Investimento de conexão (subestação)", brl(investimento.total - investimento.cargaValor)],
+    ["Investimento total (carga + subestação)", brl(investimento.total)],
+    ["Payback do investimento total", cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—"],
   ];
 
   await gerarPropostaPdf({
@@ -1268,7 +1294,7 @@ async function exportarPdfMigracao() {
     responsavelNome: $("m-responsavel-nome").value,
     responsavelCargo: $("m-responsavel-cargo").value,
     email: $("m-email").value,
-    resumoExecutivo: `Esta proposta avalia a migração de ${cliente} do Grupo B para o Grupo A diante do aumento de carga projetado, comparando o custo de energia nos dois grupos tarifários no mesmo nível de consumo e o retorno do investimento de conexão necessário.`,
+    resumoExecutivo: `Esta proposta avalia a migração de ${cliente} do Grupo B para o Grupo A diante do aumento de carga projetado${temCarga ? ` (${cargaTipo.toLowerCase()})` : ""}, comparando o custo de energia nos dois grupos tarifários no mesmo nível de consumo e o retorno do investimento total necessário (carga + conexão).`,
     diagnostico,
     escopo,
     tabelaFinanceira,
@@ -1281,9 +1307,10 @@ async function exportarPdfMigracao() {
     cronograma: [
       "Etapa 1: projeto elétrico da subestação, ART e solicitação de acesso junto à distribuidora.",
       "Etapa 2: fornecimento e instalação do transformador e obra civil da cabine primária.",
-      "Etapa 3: montagem da medição e proteção, vistoria e energização pela distribuidora.",
-      "Etapa 4: acompanhamento da primeira fatura como Grupo A e ajuste fino da demanda contratada.",
-    ],
+      temCarga ? `Etapa 3: fornecimento e instalação de ${cargaTipo.toLowerCase()}.` : null,
+      `Etapa ${temCarga ? 4 : 3}: montagem da medição e proteção, vistoria e energização pela distribuidora.`,
+      `Etapa ${temCarga ? 5 : 4}: acompanhamento da primeira fatura como Grupo A e ajuste fino da demanda contratada.`,
+    ].filter(Boolean),
     notaRodape:
       "Comparação construída a partir das regras gerais de tarifação Grupo B/Grupo A e Mercado Livre — não há uma planilha de referência específica para este cenário; os valores de tarifa e investimento devem ser ajustados caso a caso com a distribuidora local e um orçamento de engenharia. Não substitui análise técnica detalhada nem estudo de acesso junto à distribuidora.",
     fileName: `proposta-migracao-${(cliente || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`,

@@ -559,7 +559,24 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
 
       <div class="grid lg:grid-cols-2 gap-6 mb-6">
         <div class="rounded-xl bg-white border border-slate-200 p-5">
-          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Investimento de conexão (subestação)</h2>
+          <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Investimento total (carga + subestação)</h2>
+
+          <p class="text-[11px] font-semibold text-slate-500 mb-2">Carga que motiva o aumento</p>
+          <div class="grid grid-cols-2 gap-2 text-sm mb-3">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tipo de carga</label>
+              <select id="m-carga-tipo" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                <option value="Carregador elétrico" selected>Carregador elétrico</option>
+                <option value="Expansão de máquinas/processo industrial">Expansão de máquinas/processo industrial</option>
+                <option value="Climatização (HVAC)">Climatização (HVAC)</option>
+                <option value="Outro">Outro (especificar)</option>
+              </select>
+            </div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Valor da carga — preço final com instalação (R$)</label><input id="m-carga-valor" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div id="m-carga-outro-wrap" class="col-span-2 hidden"><label class="block text-[11px] font-semibold text-slate-500 mb-1">Especifique o tipo de carga</label><input id="m-carga-outro" type="text" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          </div>
+
+          <p class="text-[11px] font-semibold text-slate-500 mb-2 pt-2 border-t border-slate-100">Conexão à rede (subestação)</p>
           <div class="grid grid-cols-2 gap-2 text-sm">
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Transformador (R$)</label><input id="m-transformador" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Obra civil (R$)</label><input id="m-obra-civil" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
@@ -569,7 +586,7 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Outros (R$)</label><input id="m-investimento-outros" type="number" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
           </div>
           <div class="flex justify-between text-sm bg-slate-50 rounded-lg px-3 py-2 mt-3">
-            <span class="text-slate-500">Investimento total de migração</span>
+            <span class="text-slate-500">Investimento total (carga + subestação)</span>
             <span id="m-out-investimento" class="font-semibold text-maia-navy">—</span>
           </div>
         </div>
