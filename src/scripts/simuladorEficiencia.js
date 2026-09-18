@@ -411,11 +411,34 @@ async function imagemArquivoParaBase64(file) {
   return redimensionarImagem(img);
 }
 
-// PDFs de conta variam muito sobre em qual página fica o "Histórico de consumo" (às vezes é
-// a 1ª, às vezes o verso) — em vez de adivinhar, renderiza até 3 páginas como imagens e manda
-// todas juntas pro modelo (GPT-4o-mini aceita várias imagens por chamada nativamente), que
-// procura os dados em qualquer uma delas.
-async function pdfArquivoParaImagensBase64(file, maxPaginas = 3) {
+// Descoberta ao testar contra uma conta real: aumentar a resolução da página inteira não
+// ajudava a leitura da tabela de consumo, porque a própria OpenAI reduz a imagem internamente
+// pra uma resolução fixa antes de processar (mesmo com detail:"high") — então uma tabela que
+// ocupa só uma fatia da página (a "Histórico de consumo"/"Consumo kWh" das contas brasileiras
+// fica tipicamente numa coluna à direita) acaba renderizada pequena demais nesse orçamento fixo
+// de pixels, não importa a resolução original enviada. A saída é RECORTAR essa região e mandar
+// como imagem separada em alta resolução, além da página inteira (pro resto dos campos:
+// cliente, endereço, tarifas). É um recorte heurístico (não é garantido que toda conta tenha
+// esse layout), mas é o padrão mais comum o bastante pra valer a pena por padrão.
+async function paginaParaBase64(canvas) {
+  const png = canvas.toDataURL("image/png").split(",")[1];
+  if (png.length <= 0.9 * 1024 * 1024) return png;
+  return canvas.toDataURL("image/jpeg", 0.92).split(",")[1];
+}
+
+function recortarCanvas(origem, xFrac, yFrac, wFrac, hFrac, escalaExtra = 1.8) {
+  const sx = origem.width * xFrac;
+  const sy = origem.height * yFrac;
+  const sw = origem.width * wFrac;
+  const sh = origem.height * hFrac;
+  const recorte = document.createElement("canvas");
+  recorte.width = sw * escalaExtra;
+  recorte.height = sh * escalaExtra;
+  recorte.getContext("2d").drawImage(origem, sx, sy, sw, sh, 0, 0, recorte.width, recorte.height);
+  return recorte;
+}
+
+async function pdfArquivoParaImagensBase64(file, maxPaginas = 2) {
   const buffer = await file.arrayBuffer();
   const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
   const imagens = [];
@@ -428,7 +451,13 @@ async function pdfArquivoParaImagensBase64(file, maxPaginas = 3) {
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-    imagens.push(canvas.toDataURL("image/jpeg", 0.85).split(",")[1]);
+    imagens.push(await paginaParaBase64(canvas));
+    // Recorte em alta resolução do quadrante inferior-direito da página — não só a faixa
+    // direita inteira (de cima a baixo): o topo dessa faixa geralmente é logo/QR/dados do
+    // cliente, não a tabela de consumo, e incluir isso só dilui a resolução disponível pra
+    // tabela em si. Margem generosa (38%-96% da altura) pra não cortar a tabela se o layout
+    // variar um pouco de uma conta pra outra.
+    imagens.push(await paginaParaBase64(recortarCanvas(canvas, 0.52, 0.38, 0.48, 0.58, 2.2)));
   }
   return imagens;
 }

@@ -885,7 +885,7 @@ async function handleAneelTarifas(request) {
 // alguns dados do cliente, evitando digitação manual.
 // Sem cache: cada conta é um documento pessoal do cliente, não um dado de referência público
 // como os de irradiação/ANEEL acima — nunca deve ficar guardada na borda da Cloudflare.
-const PROMPT_SCAN_CONTA = `Você extrai dados estruturados de contas de energia elétrica brasileiras (Enel, CPFL, Light, Cemig, Copel, Celesc etc), de clientes do Grupo B (baixa tensão, tarifa única por kWh, sem demanda contratada). Pode receber mais de uma imagem — são páginas da mesma conta (o "Histórico de consumo" e a tabela de tributos às vezes ficam na 1ª página, às vezes no verso) — procure os dados em todas elas. Retorne APENAS um JSON (sem markdown, sem texto extra) no formato:
+const PROMPT_SCAN_CONTA = `Você extrai dados estruturados de contas de energia elétrica brasileiras (Enel, CPFL, Light, Cemig, Copel, Celesc etc), de clientes do Grupo B (baixa tensão, tarifa única por kWh, sem demanda contratada). Você vai receber várias imagens: para cada página da conta, a página inteira E um recorte ampliado (zoom) da faixa direita dessa mesma página, onde normalmente fica a tabela "Histórico de consumo"/"Consumo kWh". Use as imagens de página inteira pra achar cliente, endereço, tarifas — e use o RECORTE AMPLIADO como fonte principal para ler os 12 valores de consumo mensal, já que ali os dígitos aparecem maiores e mais legíveis. NUNCA invente ou estime um padrão "razoável" de consumo — se não conseguir ler um valor com confiança em nenhuma das imagens, retorne null para aquele mês em vez de um número chutado (os valores reais de consumo mensal variam de forma irregular mês a mês, nunca formam uma sequência arredondada ou uma tendência suave). Retorne APENAS um JSON (sem markdown, sem texto extra) no formato:
 {
   "cliente": string ou null (o NOME DA EMPRESA OU PESSOA titular da unidade consumidora — geralmente a primeira linha em destaque no bloco de identificação do cliente, muitas vezes com "LTDA", "ME", "EIRELI" ou similar. NÃO é o nome do bairro, rua ou cidade que aparece na linha de endereço logo abaixo — cuidado pra não confundir os dois),
   "cidade": string ou null (cidade do endereço de fornecimento, sem UF),
@@ -919,16 +919,18 @@ async function handleScanConta(request, env) {
   const body = await request.json().catch(() => null);
   const imagens = Array.isArray(body?.images) ? body.images : [];
   if (!imagens.length) return jsonResponse({ error: "envie ao menos uma imagem em images" }, 400);
-  if (imagens.length > 3) return jsonResponse({ error: "no máximo 3 páginas/imagens por vez" }, 400);
+  // O front-end manda a página inteira + um recorte em alta resolução da tabela de consumo pra
+  // cada página (2 imagens/página) — até 2 páginas = até 4 imagens.
+  if (imagens.length > 4) return jsonResponse({ error: "no máximo 4 imagens por vez" }, 400);
   for (const img of imagens) {
     if (!img?.base64 || !/^image\/(png|jpe?g|webp)$/.test(img.mimeType ?? "")) {
       return jsonResponse({ error: "cada imagem precisa de base64 e mimeType (PNG, JPG ou WEBP)" }, 400);
     }
     // A Vercel (onde o relay roda) tem um teto RÍGIDO de 4,5MB por requisição — não é algo que
-    // dá pra configurar/aumentar. Com até 3 imagens por requisição, cada uma precisa caber numa
-    // fração segura disso (o front-end já mira ~1,3MB em base64 por página); esta trava evita
+    // dá pra configurar/aumentar. Com até 4 imagens por requisição, cada uma precisa caber numa
+    // fração segura disso (o front-end já mira ~0,9MB em base64 por imagem); esta trava evita
     // que a requisição saia da Cloudflare só pra ser rejeitada (413) na Vercel sem explicação.
-    if (img.base64.length > 1.8 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~1,3MB por página após compressão)" }, 400);
+    if (img.base64.length > 1.3 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~1MB por imagem após compressão)" }, 400);
   }
   const tamanhoTotal = imagens.reduce((soma, img) => soma + img.base64.length, 0);
   if (tamanhoTotal > 4 * 1024 * 1024) return jsonResponse({ error: "conta muito grande no total (some as páginas) — tente com menos páginas" }, 400);
