@@ -881,109 +881,87 @@ async function handleAneelTarifas(request) {
   );
 }
 
-// Escaneia uma foto/print da conta de energia via GPT-4o-mini (visão) para extrair o
-// histórico de consumo mensal e alguns dados do cliente, evitando digitação manual.
-// Chave da OpenAI fica só no Worker (secret OPENAI_API_KEY) — nunca é exposta ao navegador.
+// Escaneia uma foto/print da conta de energia via Workers AI (visão) para extrair o histórico
+// de consumo mensal e alguns dados do cliente, evitando digitação manual. Roda dentro da rede
+// da própria Cloudflare — sem chave externa, sem chamada de saída.
 // Sem cache: cada conta é um documento pessoal do cliente, não um dado de referência público
 // como os de irradiação/ANEEL acima — nunca deve ficar guardada na borda da Cloudflare.
-const PROMPT_SCAN_CONTA = `Você extrai dados estruturados de contas de energia elétrica brasileiras (Enel, CPFL, Light, Cemig, Copel, Celesc etc), de clientes do Grupo B (baixa tensão, tarifa única por kWh, sem demanda contratada). Pode receber mais de uma imagem — são páginas da mesma conta (o "Histórico de consumo" e a tabela de tributos às vezes ficam na 1ª página, às vezes no verso); procure os dados em todas elas. Retorne APENAS um JSON (sem markdown, sem texto extra) no formato:
+const PROMPT_SCAN_CONTA = `Você extrai dados estruturados de contas de energia elétrica brasileiras (Enel, CPFL, Light, Cemig, Copel, Celesc etc), de clientes do Grupo B (baixa tensão, tarifa única por kWh, sem demanda contratada). A imagem pode conter mais de uma página da mesma conta, empilhadas verticalmente (o "Histórico de consumo" e a tabela de tributos às vezes ficam na 1ª página, às vezes no verso) — procure os dados em toda a imagem. Retorne APENAS um JSON (sem markdown, sem texto extra) no formato:
 {
-  "cliente": string ou null (nome do titular/unidade consumidora),
+  "cliente": string ou null (o NOME DA EMPRESA OU PESSOA titular da unidade consumidora — geralmente a primeira linha em destaque no bloco de identificação do cliente, muitas vezes com "LTDA", "ME", "EIRELI" ou similar. NÃO é o nome do bairro, rua ou cidade que aparece na linha de endereço logo abaixo — cuidado pra não confundir os dois),
   "cidade": string ou null (cidade do endereço de fornecimento, sem UF),
   "uf": string ou null (sigla de 2 letras),
   "distribuidora": string ou null,
   "tipo_rede": "Monofásica" | "Bifásica" | "Trifásica" | null (pela tensão/ligação informada na conta, se houver),
-  "historico_consumo": array de objetos { "mes": "JAN"|"FEV"|"MAR"|"ABR"|"MAI"|"JUN"|"JUL"|"AGO"|"SET"|"OUT"|"NOV"|"DEZ", "kwh": number }, um por mês do gráfico/tabela "Histórico de consumo" (geralmente os últimos 12 meses),
+  "historico_consumo": array de objetos { "mes": "JAN"|"FEV"|"MAR"|"ABR"|"MAI"|"JUN"|"JUL"|"AGO"|"SET"|"OUT"|"NOV"|"DEZ", "kwh": number }, um por mês da tabela/gráfico "Consumo" ou "Histórico de consumo" (geralmente os últimos 12 meses). FORMATO NUMÉRICO BRASILEIRO — leia com cuidado: a tabela escreve valores como "12.800,000" — o PONTO é separador de milhar e ",000" é a parte decimal (sempre zero, sem significado). Isso significa DOZE MIL E OITOCENTOS, e deve virar o número 12800 no JSON — nunca 12.8 nem 12800.000. Outro exemplo: "1.059" na conta = 1059 no JSON, não 1.059.,
   "te_com_imposto": number ou null (tarifa de energia/TE em R$/kWh, valor unitário já com impostos, como cobrado na fatura — geralmente na linha "Energia Elétrica" ou "Consumo"),
   "tusd_com_imposto": number ou null (tarifa TUSD em R$/kWh, valor unitário já com impostos — linha "Energia Elétrica TUSD" ou similar; se a conta só mostrar um valor único de energia sem separar TE/TUSD, deixe os dois null),
   "icms_percent": number ou null (alíquota de ICMS em %, geralmente na seção de tributos/impostos da conta),
   "pis_cofins_percent": number ou null (soma das alíquotas de PIS + COFINS em %, se mostradas separadamente some as duas),
   "iluminacao_publica": number ou null (valor em R$ da Contribuição de Iluminação Pública/COSIP, cobrada à parte)
 }
-Se um campo não estiver visível ou você não tiver certeza, use null (para historico_consumo, use um array vazio). Não invente valores.`;
+Se um campo não estiver visível ou você não tiver certeza, use null (para historico_consumo, use um array vazio). Não invente valores. IMPORTANTE: sua resposta inteira deve ser SOMENTE o objeto JSON — comece direto com "{" e termine com "}". Não escreva nenhuma frase de introdução, explicação, análise ou comentário antes ou depois do JSON.`;
 
+// Roda dentro da rede da própria Cloudflare (binding env.AI, não um fetch() de saída) — depois
+// de uma sessão inteira de diagnóstico (chave sem espaço, retry, timeout, User-Agent de
+// navegador, AI Gateway da própria Cloudflare, hospedar a imagem numa URL em vez de embutir)
+// confirmando que TODO tráfego deste Worker pra api.openai.com estava sendo bloqueado antes de
+// chegar lá (0 requisições no dashboard de uso da OpenAI, mesmo pra chamadas de texto puro),
+// migrado de GPT-4o-mini pra este modelo — sem chamada de saída, não tem como sofrer esse tipo
+// de bloqueio de rede. Único parâmetro do modelo é `image` como array de bytes 0-255 (formato
+// documentado da Workers AI) e só aceita 1 imagem por vez — por isso o front-end combina as
+// páginas do PDF numa imagem só (empilhadas verticalmente) antes de enviar.
 async function handleScanConta(request, env) {
-  if (!env.OPENAI_API_KEY) return jsonResponse({ error: "Leitura automática não configurada (falta OPENAI_API_KEY)." }, 500);
-
   const body = await request.json().catch(() => null);
-  const imagens = Array.isArray(body?.images) ? body.images : [];
-  if (!imagens.length) return jsonResponse({ error: "envie ao menos uma imagem em images" }, 400);
-  if (imagens.length > 3) return jsonResponse({ error: "no máximo 3 páginas/imagens por vez" }, 400);
-  for (const img of imagens) {
-    if (!img?.base64 || !/^image\/(png|jpe?g|webp)$/.test(img.mimeType ?? "")) {
-      return jsonResponse({ error: "cada imagem precisa de base64 e mimeType (PNG, JPG ou WEBP)" }, 400);
-    }
-    // ~5.5MB em base64 ≈ 4MB de imagem original — o front-end já redimensiona antes de enviar,
-    // isso aqui é só uma trava de segurança contra payloads fora do esperado.
-    if (img.base64.length > 5.5 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~4MB por página)" }, 400);
+  if (!body?.image || !/^image\/(png|jpe?g|webp)$/.test(body?.mimeType ?? "")) {
+    return jsonResponse({ error: "envie image (base64) e mimeType (PNG, JPG ou WEBP)" }, 400);
+  }
+  // ~7.5MB em base64 ≈ 5.5MB de imagem original — o front-end já redimensiona/combina páginas
+  // antes de enviar, isso aqui é só uma trava de segurança contra payloads fora do esperado.
+  if (body.image.length > 7.5 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~5.5MB)" }, 400);
+
+  const bytes = Uint8Array.from(atob(body.image), (c) => c.charCodeAt(0));
+
+  let resultado;
+  try {
+    resultado = await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
+      image: Array.from(bytes),
+      prompt: PROMPT_SCAN_CONTA,
+      max_tokens: 2048,
+      temperature: 0.15, // extração factual, não geração criativa — baixo pra reduzir alucinação/inconsistência
+    });
+  } catch (err) {
+    return jsonResponse({ error: `falha ao consultar o modelo de visão: ${String(err)}` }, 502);
   }
 
-  const openaiBody = JSON.stringify({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: PROMPT_SCAN_CONTA },
-          ...imagens.map((img) => ({ type: "image_url", image_url: { url: `data:${img.mimeType};base64,${img.base64}` } })),
-        ],
-      },
-    ],
-  });
+  const texto = resultado?.response;
+  if (!texto) return jsonResponse({ error: "resposta vazia do modelo" }, 502);
 
-  const openaiKey = (env.OPENAI_API_KEY || "").trim();
-
-  // "Network connection lost" persistiu mesmo depois do .trim() na chave — descarta a
-  // hipótese de header inválido. O padrão bate mais com o workerd derrubando a conexão de
-  // saída quando a resposta do modelo de visão demora demais (várias imagens em alta resolução
-  // pro GPT-4o-mini processar) — por isso um AbortController com timeout explícito aqui: se for
-  // isso mesmo, a mensagem de erro passa a dizer "demorou demais" em vez do genérico de rede,
-  // confirmando a causa em vez de só adivinhar de novo.
-  let res;
-  let erroFinal;
-  for (let tentativa = 1; tentativa <= 2; tentativa++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
-    try {
-      res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${openaiKey}` },
-        body: openaiBody,
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      break;
-    } catch (err) {
-      clearTimeout(timeoutId);
-      erroFinal = err;
-      if (tentativa === 2) {
-        const foiTimeout = err.name === "AbortError";
-        return jsonResponse(
-          {
-            error: foiTimeout
-              ? "A OpenAI demorou mais de 45s para responder (comum com várias páginas em alta resolução) — tente com só 1 página/foto."
-              : `Falha de conexão com a OpenAI mesmo após nova tentativa (${String(erroFinal)}).`,
-          },
-          502
-        );
-      }
-    }
-  }
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => "");
-    return jsonResponse({ error: `falha ao consultar a OpenAI (${res.status}): ${errBody.slice(0, 300)}` }, 502);
-  }
-  const data = await res.json();
-  const conteudo = data?.choices?.[0]?.message?.content;
-  if (!conteudo) return jsonResponse({ error: "resposta vazia da OpenAI" }, 502);
+  // Diferente do GPT-4o-mini (que tinha response_format:json_object garantindo só JSON), este
+  // modelo às vezes insiste em explicar em texto corrido antes/depois do JSON mesmo sendo
+  // instruído a não fazer isso. Em vez de depender só da instrução, extrai o trecho entre a
+  // primeira "{" e a última "}" da resposta — funciona tanto pra "aqui está: {...}" quanto pra
+  // respostas com um parágrafo inteiro antes do JSON de verdade.
+  const inicio = texto.indexOf("{");
+  const fim = texto.lastIndexOf("}");
+  const trechoJson = inicio >= 0 && fim > inicio ? texto.slice(inicio, fim + 1) : texto;
 
   let extraido;
   try {
-    extraido = JSON.parse(conteudo);
+    extraido = JSON.parse(trechoJson);
   } catch {
-    return jsonResponse({ error: "não consegui interpretar a resposta da OpenAI" }, 502);
+    console.error("scan-conta: resposta do modelo não é JSON válido", { texto: texto.slice(0, 800) });
+    return jsonResponse({ error: "não consegui interpretar a resposta do modelo de visão — tente novamente" }, 502);
   }
+
+  // Rede de segurança pro erro de formatação BR (ponto de milhar lido como decimal): consumo em
+  // kWh de conta residencial/comercial é sempre um número inteiro de leitura de medidor — nunca
+  // fracionário. Qualquer casa decimal aqui quase certamente é "1.059" (mil e cinquenta e nove)
+  // sendo devolvido como 1.059 (um vírgula zero cinco nove) em vez de 1059.
+  if (Array.isArray(extraido?.historico_consumo)) {
+    extraido.historico_consumo = extraido.historico_consumo.map((h) => (h && !Number.isInteger(h.kwh) && Number.isFinite(h.kwh) ? { ...h, kwh: Math.round(h.kwh * 1000) } : h));
+  }
+
   return jsonResponse(extraido);
 }
 
