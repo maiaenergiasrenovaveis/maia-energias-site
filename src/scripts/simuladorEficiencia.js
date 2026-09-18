@@ -386,10 +386,12 @@ function arquivoParaDataUrl(file) {
   });
 }
 
-// Redesenha num canvas limitado a maxDim (maior lado) e reexporta como JPEG — reduz bastante
-// o tamanho de fotos tiradas por celular (que podem vir com vários MB) antes do upload, o que
-// evita erros de rede em conexões mais lentas/instáveis e deixa a chamada à OpenAI mais rápida.
-function redimensionarImagem(img, maxDim = 1200, quality = 0.8) {
+// Redesenha num canvas limitado a maxDim (maior lado) e reexporta como JPEG. O limite não é
+// mais sobre a Cloudflare (a chamada à OpenAI agora sai pela Vercel), mas a própria Vercel tem
+// um teto RÍGIDO de 4,5MB por requisição pras Functions (não dá pra configurar/aumentar) — com
+// até 3 imagens por conta, cada uma precisa ficar bem abaixo de ~1,3MB em base64 pra não estourar
+// esse teto somadas. 1600px/0.85 é o equilíbrio entre nitidez de texto pequeno e esse limite.
+function redimensionarImagem(img, maxDim = 1600, quality = 0.85) {
   const escala = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(img.naturalWidth * escala);
@@ -421,7 +423,7 @@ async function pdfArquivoParaImagensBase64(file, maxPaginas = 3) {
   for (let i = 1; i <= totalPaginas; i++) {
     const page = await pdf.getPage(i);
     const viewportBase = page.getViewport({ scale: 1 });
-    const viewport = page.getViewport({ scale: 1400 / Math.max(viewportBase.width, viewportBase.height) });
+    const viewport = page.getViewport({ scale: 1600 / Math.max(viewportBase.width, viewportBase.height) });
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;

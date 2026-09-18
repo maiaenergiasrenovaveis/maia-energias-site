@@ -924,10 +924,14 @@ async function handleScanConta(request, env) {
     if (!img?.base64 || !/^image\/(png|jpe?g|webp)$/.test(img.mimeType ?? "")) {
       return jsonResponse({ error: "cada imagem precisa de base64 e mimeType (PNG, JPG ou WEBP)" }, 400);
     }
-    // ~5.5MB em base64 ≈ 4MB de imagem original — o front-end já redimensiona antes de enviar,
-    // isso aqui é só uma trava de segurança contra payloads fora do esperado.
-    if (img.base64.length > 5.5 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~4MB por página)" }, 400);
+    // A Vercel (onde o relay roda) tem um teto RÍGIDO de 4,5MB por requisição — não é algo que
+    // dá pra configurar/aumentar. Com até 3 imagens por requisição, cada uma precisa caber numa
+    // fração segura disso (o front-end já mira ~1,3MB em base64 por página); esta trava evita
+    // que a requisição saia da Cloudflare só pra ser rejeitada (413) na Vercel sem explicação.
+    if (img.base64.length > 1.8 * 1024 * 1024) return jsonResponse({ error: "imagem muito grande (máx. ~1,3MB por página após compressão)" }, 400);
   }
+  const tamanhoTotal = imagens.reduce((soma, img) => soma + img.base64.length, 0);
+  if (tamanhoTotal > 4 * 1024 * 1024) return jsonResponse({ error: "conta muito grande no total (some as páginas) — tente com menos páginas" }, 400);
 
   let texto;
   try {
