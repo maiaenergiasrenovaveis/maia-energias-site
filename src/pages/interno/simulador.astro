@@ -315,7 +315,19 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
             <div id="b-solar-fields" class="mt-2 hidden">
               <label class="block text-[11px] font-semibold text-slate-500 mb-1">Geração solar estimada (kWh/mês)</label>
               <input id="b-solar-geracao" type="number" step="1" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
-              <p class="text-[10px] text-slate-400 mt-1">Estimativa simples (não dimensiona a usina aqui) — abate energia fora ponta, sem passar de zero. Para dimensionar em detalhe, use o módulo Solar e traga a geração média mensal.</p>
+              <p class="text-[10px] text-slate-400 mt-1">Estimativa simples (não dimensiona a usina aqui). Para dimensionar em detalhe, use o módulo Solar e traga a geração média mensal.</p>
+              <div class="mt-2">
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">Modo de uso do excedente</label>
+                <select id="b-solar-modo" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                  <option value="zero-grid">Grid Zero — BESS armazena o excedente (usa ~100% da geração)</option>
+                  <option value="simultaneidade">Simultaneidade parcial — excedente vai pra rede (crédito p/ compensação futura)</option>
+                </select>
+              </div>
+              <div id="b-solar-simultaneidade-wrap" class="mt-2 hidden">
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">Simultaneidade (%) — fração da geração usada instantaneamente</label>
+                <input id="b-solar-simultaneidade" type="number" step="1" value="60" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+                <p class="text-[10px] text-slate-400 mt-1">O restante da geração vira crédito de compensação pra uso futuro — visão conservadora, não é contado como economia neste mês.</p>
+              </div>
             </div>
           </div>
         </div>

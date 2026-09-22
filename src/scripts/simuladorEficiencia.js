@@ -899,6 +899,10 @@ function initBess() {
     $("b-solar-fields").classList.toggle("hidden", !$("b-usar-solar").checked);
     computeBess();
   });
+  $("b-solar-modo").addEventListener("change", () => {
+    $("b-solar-simultaneidade-wrap").classList.toggle("hidden", $("b-solar-modo").value !== "simultaneidade");
+    computeBess();
+  });
   $("b-modo-aquisicao").addEventListener("change", () => {
     const eaas = $("b-modo-aquisicao").value === "eaas";
     $("b-capex-fields").classList.toggle("hidden", eaas);
@@ -1086,7 +1090,14 @@ function computeBess() {
   const modoAquisicao = $("b-modo-aquisicao").value;
   const rte = Number($("b-rte").value) / 100 || 0.9;
   const corrigirReativo = $("b-corrigir-reativo").checked;
-  const geracaoSolarMensalKwh = $("b-usar-solar").checked ? Number($("b-solar-geracao").value) || 0 : 0;
+  // Grid Zero: o BESS prioriza guardar o excedente solar em vez de exportar pra rede, então
+  // quase toda a geração vira economia direta. Simultaneidade parcial: só a fração que coincide
+  // com consumo instantâneo é usada na hora — o resto vira crédito de compensação (Lei 14.300)
+  // pra uso futuro, que este modelo (uma foto mensal, não uma simulação hora a hora) não tenta
+  // rastrear — por isso não entra como economia deste mês (visão conservadora).
+  const geracaoSolarBruta = $("b-usar-solar").checked ? Number($("b-solar-geracao").value) || 0 : 0;
+  const solarSimultaneidade = $("b-solar-modo").value === "simultaneidade" ? Number($("b-solar-simultaneidade").value) / 100 || 0.6 : 1;
+  const geracaoSolarMensalKwh = geracaoSolarBruta * solarSimultaneidade;
   const camposComuns = {
     energiaPontaKwh: consumoPontaMensal,
     energiaForaPontaKwh: Number($("b-energia-fora-ponta").value) || 0,
@@ -1259,13 +1270,20 @@ async function exportarPdfBess() {
   ];
 
   const corrigirReativo = $("b-corrigir-reativo").checked;
-  const geracaoSolarMensalKwh = $("b-usar-solar").checked ? Number($("b-solar-geracao").value) || 0 : 0;
+  const geracaoSolarBruta = $("b-usar-solar").checked ? Number($("b-solar-geracao").value) || 0 : 0;
+  const solarZeroGrid = $("b-solar-modo").value !== "simultaneidade";
+  const solarSimultaneidade = Number($("b-solar-simultaneidade").value) / 100 || 0.6;
+  const geracaoSolarMensalKwh = geracaoSolarBruta * (solarZeroGrid ? 1 : solarSimultaneidade);
 
   const escopo = [
     `Instalação de banco de baterias (BESS) de ${num(bess.potenciaRecomendadaKw, 1)} kW / ${num(bess.capacidadeFinalKwh, 1)} kWh para deslocamento de carga na ponta (peak shaving).`,
     `Redução da demanda contratada de ${num(Number($("b-demanda").value), 0)} kW para ${num(Number($("b-demanda-pos").value), 0)} kW.`,
     corrigirReativo ? "Correção do fator de potência via o próprio inversor do BESS, eliminando a cobrança de reativo excedente." : null,
-    geracaoSolarMensalKwh > 0 ? `Geração solar própria estimada em ${num(geracaoSolarMensalKwh, 0)} kWh/mês, compensando parte do consumo fora ponta.` : null,
+    geracaoSolarBruta > 0
+      ? solarZeroGrid
+        ? `Geração solar própria estimada em ${num(geracaoSolarBruta, 0)} kWh/mês, em modo Grid Zero — o BESS armazena o excedente em vez de exportar, aproveitando praticamente toda a geração.`
+        : `Geração solar própria estimada em ${num(geracaoSolarBruta, 0)} kWh/mês, com ${num(solarSimultaneidade * 100, 0)}% de simultaneidade (uso instantâneo); o restante é exportado como crédito de compensação para uso futuro.`
+      : null,
     cenarios.usarMercadoLivre
       ? `Migração para o Mercado Livre de Energia, com energia estimada em R$ ${num(Number($("b-tarifa-ml").value), 4)}/kWh + TUSD de R$ ${num(Number($("b-tarifa-tusd").value), 4)}/kWh (continua devido à distribuidora local).`
       : null,
