@@ -897,6 +897,7 @@ function initBess() {
   });
   $("b-usar-solar").addEventListener("change", () => {
     $("b-solar-fields").classList.toggle("hidden", !$("b-usar-solar").checked);
+    $("b-solar-investimento-wrap").classList.toggle("hidden", !$("b-usar-solar").checked);
     computeBess();
   });
   $("b-solar-modo").addEventListener("change", () => {
@@ -1121,6 +1122,7 @@ function computeBess() {
     ...camposComuns,
     modoAquisicao,
     investimentoBess: Number($("b-investimento").value) || 0,
+    investimentoSolar: geracaoSolarMensalKwh > 0 ? Number($("b-solar-investimento").value) || 0 : 0,
     mensalidadeEaasInicial: Number($("b-mensalidade").value) || 0,
     lucroReal: $("b-lucro-real").checked,
     creditoPisCofinsPercent: Number($("b-credito-piscofins").value) / 100,
@@ -1142,13 +1144,19 @@ function computeBess() {
     // não é afetada pela forma de pagamento do equipamento.
     cardHtml("Economia de energia (mês, ano 1)", brl(cenarios.economiaEnergiaMensalAno1)),
   ];
+  const paybackLabel = cenarios.investimentoSolar > 0 ? (modoAquisicao === "eaas" ? "Payback (só solar, CAPEX)" : "Payback (BESS + solar)") : "Payback";
   if (modoAquisicao === "capex") {
-    cards.push(cardHtml("Payback", cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—"));
+    cards.push(cardHtml(paybackLabel, cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—"));
   } else {
     cards.push(cardHtml("Mensalidade EaaS", brl2(cenarios.lucroReal ? l1.mensalidadeEaasLiquida : l1.mensalidadeEaasNominal)));
     cards.push(cardHtml("Resultado líquido mensal (após mensalidade)", brl2(cenarios.resultadoLiquidoMensalAno1)));
     if (cenarios.lucroReal) {
       cards.push(cardHtml("Mensalidade EaaS (nominal, sem crédito)", brl2(l1.mensalidadeEaasNominal)));
+    }
+    // O BESS em si não tem payback em EaaS (é mensalidade, não investimento) — mas a usina
+    // solar continua sendo CAPEX à parte, então ainda faz sentido mostrar o payback dela sozinha.
+    if (cenarios.paybackMeses) {
+      cards.push(cardHtml(paybackLabel, `${num(cenarios.paybackMeses, 1)} meses`));
     }
   }
   $("b-result-cards").innerHTML = cards.join("");
@@ -1299,6 +1307,13 @@ async function exportarPdfBess() {
     ["Economia de energia acumulada (ano 1)", brl(cenarios.linhas[0].economiaEnergiaAnual)],
     [`Economia de energia total (${cenarios.linhas.length} anos)`, brl(cenarios.economiaEnergiaTotalHorizonte)],
   ];
+  if (cenarios.investimentoSolar > 0) {
+    if (modoAquisicao === "capex") {
+      tabelaFinanceira.push(["Investimento BESS", brl(cenarios.investimentoBess)]);
+    }
+    tabelaFinanceira.push(["Investimento Solar (usina própria)", brl(cenarios.investimentoSolar)]);
+    tabelaFinanceira.push(["Investimento total (BESS + Solar)", brl(cenarios.investimento)]);
+  }
   if (modoAquisicao === "capex") {
     tabelaFinanceira.push(["Tempo de retorno (payback)", cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—"]);
   } else {
@@ -1308,6 +1323,9 @@ async function exportarPdfBess() {
     }
     tabelaFinanceira.push(["Resultado líquido mensal (economia − mensalidade)", brl2(cenarios.resultadoLiquidoMensalAno1)]);
     tabelaFinanceira.push([`Resultado líquido total (${cenarios.linhas.length} anos)`, brl(cenarios.resultadoLiquidoTotalHorizonte)]);
+    if (cenarios.paybackMeses) {
+      tabelaFinanceira.push(["Tempo de retorno do investimento solar (payback)", `${num(cenarios.paybackMeses, 1)} meses`]);
+    }
   }
 
   await gerarPropostaPdf({
@@ -1332,8 +1350,13 @@ async function exportarPdfBess() {
           : [p.label, `− ${brl2(p.reducao)}`, brl2(p.total)]
       ),
     },
-    investimentoTotal: modoAquisicao === "capex" ? cenarios.investimento : 0,
-    formaPagamento: modoAquisicao === "capex" ? $("b-forma-pagamento").value : "Assinatura mensal (EaaS) — sem investimento inicial",
+    investimentoTotal: cenarios.investimento,
+    formaPagamento:
+      modoAquisicao === "capex"
+        ? $("b-forma-pagamento").value
+        : cenarios.investimentoSolar > 0
+          ? `Assinatura mensal (EaaS) para o BESS — usina solar à parte: ${$("b-forma-pagamento").value}`
+          : "Assinatura mensal (EaaS) — sem investimento inicial",
     prazoExecucaoDias: $("b-prazo-execucao").value || "—",
     validadeDias: $("b-validade-proposta").value || "—",
     observacoes: $("b-observacoes").value,

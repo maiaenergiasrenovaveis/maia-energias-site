@@ -190,7 +190,12 @@ export function calcularCenariosGrupoA(p) {
 
   const economiaEnergiaMensalAno1 = linhas[0].economiaEnergiaMensal;
   const resultadoLiquidoMensalAno1 = linhas[0].resultadoLiquidoMensal;
-  const investimento = p.modoAquisicao === "eaas" ? 0 : p.investimentoBess ?? 0;
+  // A usina solar é sempre um investimento à parte (CAPEX), mesmo quando o BESS em si é
+  // contratado como EaaS — por isso soma independente do modoAquisicao, diferente do
+  // investimento do BESS (que só entra aqui se for CAPEX; em EaaS ele vira mensalidade).
+  const investimentoBess = p.modoAquisicao === "eaas" ? 0 : p.investimentoBess ?? 0;
+  const investimentoSolar = p.investimentoSolar ?? 0;
+  const investimento = investimentoBess + investimentoSolar;
   const paybackMeses = investimento > 0 && economiaEnergiaMensalAno1 > 0 ? investimento / economiaEnergiaMensalAno1 : null;
   const economiaEnergiaTotalHorizonte = linhas.reduce((acc, l) => acc + l.economiaEnergiaAnual, 0);
   const resultadoLiquidoTotalHorizonte = linhas.reduce((acc, l) => acc + l.resultadoLiquidoAnual, 0);
@@ -200,6 +205,8 @@ export function calcularCenariosGrupoA(p) {
     economiaEnergiaMensalAno1,
     resultadoLiquidoMensalAno1,
     investimento,
+    investimentoBess,
+    investimentoSolar,
     paybackMeses,
     economiaEnergiaTotalHorizonte,
     resultadoLiquidoTotalHorizonte,
@@ -256,9 +263,13 @@ export function calcularEscadaReducoesGrupoA(p) {
     }).total;
 
   const passos = [{ label: "Atual", total: calcularTotal() }];
+  // Um passo sem efeito prático (ex.: "Ajuste de demanda" quando a demanda pós-BESS informada é
+  // igual à atual) só polui a escadinha sem agregar informação — pula em vez de mostrar "− R$ 0".
   const passo = (label) => {
     const total = calcularTotal();
-    passos.push({ label, total, reducao: passos[passos.length - 1].total - total });
+    const reducao = passos[passos.length - 1].total - total;
+    if (Math.abs(reducao) < 0.01) return;
+    passos.push({ label, total, reducao });
   };
 
   estado = { ...estado, demandaContratadaKw: demandaPosBess };
