@@ -87,6 +87,14 @@ export function calcularCenariosGrupoA(p) {
   const reajusteTarifario = p.reajusteTarifario ?? 0.125; // +12,5% a.a. observado nas planilhas de referência
   const ipca = p.ipca ?? 0.0514;
   const usarMercadoLivre = !!(p.usarMercadoLivre && p.tarifaMercadoLivre != null);
+  // O BESS não é 100% eficiente: pra descarregar X kWh na ponta, ele precisa CARREGAR X/rte kWh
+  // antes (a perda de round-trip vira calor, não desaparece) — e essa recarga é puxada da rede
+  // fora de ponta (mesma lógica de "energiaRecargaDiaria" já usada no dimensionamento de
+  // potência/capacidade em calcularBESS, só que aqui aplicada ao IMPACTO NA CONTA, que antes
+  // não considerava essa energia extra nenhuma).
+  const rte = p.rte > 0 ? p.rte : 0.9;
+  const corrigirReativo = !!p.corrigirReativo;
+  const geracaoSolarMensalKwh = p.geracaoSolarMensalKwh ?? 0;
 
   const base = {
     energiaPontaKwh: p.energiaPontaKwh,
@@ -131,14 +139,21 @@ export function calcularCenariosGrupoA(p) {
     });
 
     const efetividade = efetividadeBessNoAno(anoRelativo);
+    const energiaDeslocadaPeloBess = base.energiaPontaKwh * efetividade;
+    const energiaCargaBess = energiaDeslocadaPeloBess / rte;
+    // Energia fora ponta com BESS = a que já era consumida + a recarga do BESS (puxada fora de
+    // ponta, mais barata) − a geração solar do mês (compensação líquida, sem passar de zero).
+    const energiaForaPontaComBess = Math.max(0, base.energiaForaPontaKwh + energiaCargaBess - geracaoSolarMensalKwh);
     // Cenário "com BESS": se a migração para Mercado Livre está marcada, ela é
     // aplicada aqui (substitui as tarifas ponta/fora ponta reguladas pela tarifa
     // ML sobre toda a energia) — não é um "pega o mais barato" automático, é a
     // combinação que o usuário escolheu modelar.
     const comBess = calcularContaGrupoA({
       ...base,
-      energiaPontaKwh: base.energiaPontaKwh * (1 - efetividade),
+      energiaPontaKwh: base.energiaPontaKwh - energiaDeslocadaPeloBess,
+      energiaForaPontaKwh: energiaForaPontaComBess,
       demandaContratadaKw: p.demandaContratadaKwPosBess ?? base.demandaContratadaKw,
+      reativoExcedente: corrigirReativo ? 0 : base.reativoExcedente,
       tarifaPonta,
       tarifaForaPonta,
       tarifaMercadoLivre,
@@ -197,76 +212,81 @@ export function calcularCenariosGrupoA(p) {
 /**
  * Decompõe a economia do Grupo A em passos sucessivos ("escadinha"), na ordem em que as
  * reduções normalmente acontecem no projeto: 1) ajuste da demanda contratada (peak shaving
- * reduz o pico, permitindo contratar uma demanda menor), 2) zerar o consumo de energia
- * comprado da distribuidora no horário de ponta (o BESS cobre esse consumo por completo,
- * não só uma fração), 3) migração para o Mercado Livre (se marcada). Cada passo usa as
- * tarifas do ano 1 (sem reajuste), pra bater com contaAtual/contaComBess de linhas[0] em
- * calcularCenariosGrupoA — é só outra forma de olhar pro mesmo número, não um cálculo paralelo.
+ * reduz o pico, permitindo contratar uma demanda menor); 2) zerar o consumo de energia
+ * comprado da distribuidora no horário de ponta (líquido da recarga do BESS, que é puxada
+ * fora de ponta com perda de round-trip — ver `rte` abaixo); 3) correção do fator de potência,
+ * se marcada (o mesmo inversor do BESS costuma eliminar o reativo excedente); 4) geração
+ * solar, se informada (compensa energia fora ponta); 5) migração para o Mercado Livre, se
+ * marcada. Passos 3-5 só entram na lista se o respectivo dado for informado/marcado — a lista
+ * de passos é dinâmica, não fixa. Cada passo usa as tarifas do ano 1 (sem reajuste), pra bater
+ * com contaAtual/contaComBess de linhas[0] em calcularCenariosGrupoA — é só outra forma de
+ * olhar pro mesmo número, não um cálculo paralelo.
+ * @param {number} [p.rte] - round-trip efficiency do BESS (fração, ex.: 0.9) usada pra achar a
+ *   energia extra puxada da rede pra recarregar a bateria (energiaPontaKwh / rte)
+ * @param {boolean} [p.corrigirReativo] - se true, zera o reativo excedente a partir do passo 2
+ * @param {number} [p.geracaoSolarMensalKwh] - geração solar estimada do mês, abate energiaForaPontaKwh
  */
 export function calcularEscadaReducoesGrupoA(p) {
-  const base = {
-    demandaContratadaKw: p.demandaContratadaKw,
+  const baseFixo = {
     tarifaDemanda: p.tarifaDemanda,
-    reativoExcedente: p.reativoExcedente ?? 0,
     iluminacaoPublica: p.iluminacaoPublica ?? 0,
     outros: p.outros ?? 0,
   };
   const usarMercadoLivre = !!(p.usarMercadoLivre && p.tarifaMercadoLivre != null);
   const demandaPosBess = p.demandaContratadaKwPosBess ?? p.demandaContratadaKw;
+  const rte = p.rte > 0 ? p.rte : 0.9;
+  const corrigirReativo = !!p.corrigirReativo;
+  const geracaoSolarMensalKwh = p.geracaoSolarMensalKwh ?? 0;
 
-  const atual = calcularContaGrupoA({
-    ...base,
+  let estado = {
+    demandaContratadaKw: p.demandaContratadaKw,
     energiaPontaKwh: p.energiaPontaKwh,
     energiaForaPontaKwh: p.energiaForaPontaKwh,
-    tarifaPonta: p.tarifaPonta,
-    tarifaForaPonta: p.tarifaForaPonta,
+    reativoExcedente: p.reativoExcedente ?? 0,
     mercadoLivre: false,
-  });
+  };
+  const calcularTotal = () =>
+    calcularContaGrupoA({
+      ...baseFixo,
+      ...estado,
+      tarifaPonta: p.tarifaPonta,
+      tarifaForaPonta: p.tarifaForaPonta,
+      tarifaMercadoLivre: p.tarifaMercadoLivre,
+      tarifaTusd: p.tarifaTusd ?? 0,
+    }).total;
 
-  const comDemandaAjustada = calcularContaGrupoA({
-    ...base,
-    demandaContratadaKw: demandaPosBess,
-    energiaPontaKwh: p.energiaPontaKwh,
-    energiaForaPontaKwh: p.energiaForaPontaKwh,
-    tarifaPonta: p.tarifaPonta,
-    tarifaForaPonta: p.tarifaForaPonta,
-    mercadoLivre: false,
-  });
+  const passos = [{ label: "Atual", total: calcularTotal() }];
+  const passo = (label) => {
+    const total = calcularTotal();
+    passos.push({ label, total, reducao: passos[passos.length - 1].total - total });
+  };
 
-  const comPontaZerada = calcularContaGrupoA({
-    ...base,
-    demandaContratadaKw: demandaPosBess,
-    energiaPontaKwh: 0,
-    energiaForaPontaKwh: p.energiaForaPontaKwh,
-    tarifaPonta: p.tarifaPonta,
-    tarifaForaPonta: p.tarifaForaPonta,
-    mercadoLivre: false,
-  });
+  estado = { ...estado, demandaContratadaKw: demandaPosBess };
+  passo("Ajuste de demanda");
 
-  const comMercadoLivre = usarMercadoLivre
-    ? calcularContaGrupoA({
-        ...base,
-        demandaContratadaKw: demandaPosBess,
-        energiaPontaKwh: 0,
-        energiaForaPontaKwh: p.energiaForaPontaKwh,
-        tarifaMercadoLivre: p.tarifaMercadoLivre,
-        tarifaTusd: p.tarifaTusd ?? 0,
-        mercadoLivre: true,
-      })
-    : null;
+  const energiaCargaBess = p.energiaPontaKwh / rte;
+  estado = { ...estado, energiaPontaKwh: 0, energiaForaPontaKwh: estado.energiaForaPontaKwh + energiaCargaBess };
+  passo("Zerar consumo na ponta");
 
-  const passos = [
-    { label: "Atual", total: atual.total },
-    { label: "Ajuste de demanda", total: comDemandaAjustada.total, reducao: atual.total - comDemandaAjustada.total },
-    { label: "Zerar consumo na ponta", total: comPontaZerada.total, reducao: comDemandaAjustada.total - comPontaZerada.total },
-  ];
-  if (comMercadoLivre) {
-    passos.push({ label: "Migração para o Mercado Livre", total: comMercadoLivre.total, reducao: comPontaZerada.total - comMercadoLivre.total });
+  if (corrigirReativo && estado.reativoExcedente > 0) {
+    estado = { ...estado, reativoExcedente: 0 };
+    passo("Correção do fator de potência");
   }
+
+  if (geracaoSolarMensalKwh > 0) {
+    estado = { ...estado, energiaForaPontaKwh: Math.max(0, estado.energiaForaPontaKwh - geracaoSolarMensalKwh) };
+    passo("Geração solar");
+  }
+
+  if (usarMercadoLivre) {
+    estado = { ...estado, mercadoLivre: true };
+    passo("Migração para o Mercado Livre");
+  }
+
   const final = passos[passos.length - 1];
   passos.push({ label: "Final", total: final.total });
 
-  return { passos, usarMercadoLivre, reducaoTotal: atual.total - final.total };
+  return { passos, usarMercadoLivre, reducaoTotal: passos[0].total - final.total };
 }
 
 /**

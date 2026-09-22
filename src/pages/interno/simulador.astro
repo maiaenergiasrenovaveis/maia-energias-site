@@ -307,6 +307,17 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Demanda contratada (kW)</label><input id="b-demanda" type="number" value="230" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Demanda pós-BESS (kW)</label><input id="b-demanda-pos" type="number" value="100" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
           </div>
+          <div class="mt-3 pt-3 border-t border-slate-200">
+            <label class="flex items-center gap-2 text-sm">
+              <input id="b-usar-solar" type="checkbox" class="h-4 w-4" />
+              <span class="font-semibold text-slate-600">Considerar geração solar (usina própria compensando a conta)</span>
+            </label>
+            <div id="b-solar-fields" class="mt-2 hidden">
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Geração solar estimada (kWh/mês)</label>
+              <input id="b-solar-geracao" type="number" step="1" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+              <p class="text-[10px] text-slate-400 mt-1">Estimativa simples (não dimensiona a usina aqui) — abate energia fora ponta, sem passar de zero. Para dimensionar em detalhe, use o módulo Solar e traga a geração média mensal.</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -373,6 +384,10 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Iluminação púb. (R$/mês)</label><input id="b-iluminacao" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Outros (R$/mês)</label><input id="b-outros" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
           </div>
+          <label class="flex items-center gap-2 mt-3 text-sm">
+            <input id="b-corrigir-reativo" type="checkbox" class="h-4 w-4" />
+            <span class="font-semibold text-slate-600">Corrigir fator de potência (BESS elimina o reativo excedente)</span>
+          </label>
           <label class="flex items-center gap-2 mt-3 text-sm">
             <input id="b-usar-ml" type="checkbox" class="h-4 w-4" />
             <span class="font-semibold text-slate-600">Considerar migração para Mercado Livre</span>

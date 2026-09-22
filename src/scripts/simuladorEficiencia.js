@@ -895,6 +895,10 @@ function initBess() {
     $("b-ml-fields").classList.toggle("hidden", !$("b-usar-ml").checked);
     computeBess();
   });
+  $("b-usar-solar").addEventListener("change", () => {
+    $("b-solar-fields").classList.toggle("hidden", !$("b-usar-solar").checked);
+    computeBess();
+  });
   $("b-modo-aquisicao").addEventListener("change", () => {
     const eaas = $("b-modo-aquisicao").value === "eaas";
     $("b-capex-fields").classList.toggle("hidden", eaas);
@@ -1080,7 +1084,10 @@ function computeBess() {
   `;
 
   const modoAquisicao = $("b-modo-aquisicao").value;
-  const cenarios = calcularCenariosGrupoA({
+  const rte = Number($("b-rte").value) / 100 || 0.9;
+  const corrigirReativo = $("b-corrigir-reativo").checked;
+  const geracaoSolarMensalKwh = $("b-usar-solar").checked ? Number($("b-solar-geracao").value) || 0 : 0;
+  const camposComuns = {
     energiaPontaKwh: consumoPontaMensal,
     energiaForaPontaKwh: Number($("b-energia-fora-ponta").value) || 0,
     demandaContratadaKw: Number($("b-demanda").value) || 0,
@@ -1094,6 +1101,13 @@ function computeBess() {
     usarMercadoLivre: $("b-usar-ml").checked,
     tarifaMercadoLivre: Number($("b-tarifa-ml").value) || null,
     tarifaTusd: Number($("b-tarifa-tusd").value) || 0,
+    rte,
+    corrigirReativo,
+    geracaoSolarMensalKwh,
+  };
+
+  const cenarios = calcularCenariosGrupoA({
+    ...camposComuns,
     modoAquisicao,
     investimentoBess: Number($("b-investimento").value) || 0,
     mensalidadeEaasInicial: Number($("b-mensalidade").value) || 0,
@@ -1105,21 +1119,7 @@ function computeBess() {
     ipca: Number($("b-ipca").value) / 100,
   });
 
-  const escada = calcularEscadaReducoesGrupoA({
-    energiaPontaKwh: consumoPontaMensal,
-    energiaForaPontaKwh: Number($("b-energia-fora-ponta").value) || 0,
-    demandaContratadaKw: Number($("b-demanda").value) || 0,
-    demandaContratadaKwPosBess: Number($("b-demanda-pos").value) || 0,
-    tarifaPonta: Number($("b-tarifa-ponta").value) || 0,
-    tarifaForaPonta: Number($("b-tarifa-fora-ponta").value) || 0,
-    tarifaDemanda: Number($("b-tarifa-demanda").value) || 0,
-    reativoExcedente: Number($("b-reativo").value) || 0,
-    iluminacaoPublica: Number($("b-iluminacao").value) || 0,
-    outros: Number($("b-outros").value) || 0,
-    usarMercadoLivre: $("b-usar-ml").checked,
-    tarifaMercadoLivre: Number($("b-tarifa-ml").value) || null,
-    tarifaTusd: Number($("b-tarifa-tusd").value) || 0,
-  });
+  const escada = calcularEscadaReducoesGrupoA(camposComuns);
 
   ultimoResultadoBess = { bess, cenarios, escada, modoAquisicao };
 
@@ -1258,9 +1258,14 @@ async function exportarPdfBess() {
       : "Cliente operando integralmente no ambiente de contratação regulado (ACR).",
   ];
 
+  const corrigirReativo = $("b-corrigir-reativo").checked;
+  const geracaoSolarMensalKwh = $("b-usar-solar").checked ? Number($("b-solar-geracao").value) || 0 : 0;
+
   const escopo = [
     `Instalação de banco de baterias (BESS) de ${num(bess.potenciaRecomendadaKw, 1)} kW / ${num(bess.capacidadeFinalKwh, 1)} kWh para deslocamento de carga na ponta (peak shaving).`,
     `Redução da demanda contratada de ${num(Number($("b-demanda").value), 0)} kW para ${num(Number($("b-demanda-pos").value), 0)} kW.`,
+    corrigirReativo ? "Correção do fator de potência via o próprio inversor do BESS, eliminando a cobrança de reativo excedente." : null,
+    geracaoSolarMensalKwh > 0 ? `Geração solar própria estimada em ${num(geracaoSolarMensalKwh, 0)} kWh/mês, compensando parte do consumo fora ponta.` : null,
     cenarios.usarMercadoLivre
       ? `Migração para o Mercado Livre de Energia, com energia estimada em R$ ${num(Number($("b-tarifa-ml").value), 4)}/kWh + TUSD de R$ ${num(Number($("b-tarifa-tusd").value), 4)}/kWh (continua devido à distribuidora local).`
       : null,
