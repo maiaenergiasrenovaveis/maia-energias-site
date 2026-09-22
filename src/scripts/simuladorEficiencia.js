@@ -964,8 +964,95 @@ function initBess() {
 
   $("b-export-pdf").addEventListener("click", exportarPdfBess);
   $("b-salvar").addEventListener("click", () => salvarSimulacao("bess", "painel-bess", "b-cliente", "b-salvar-status"));
+  $("b-scan-conta-btn").addEventListener("click", escanearContaEnergiaBess);
 
   computeBess();
+}
+
+// Mesmo pipeline de imagem (recorte em alta resolução + limites de tamanho pra Vercel) usado no
+// scan do Grupo B, mas com um prompt/schema diferente (PROMPT_SCAN_CONTA_BESS no worker, via
+// tipo:"bess") porque a conta de Grupo A tem outro layout: detalhamento de UM mês por posto
+// horário (ponta/fora ponta) e demanda contratada, não um histórico de 12 meses.
+async function escanearContaEnergiaBess() {
+  const arquivo = $("b-scan-conta-arquivo").files?.[0];
+  const status = $("b-scan-conta-status");
+  if (!arquivo) {
+    status.textContent = "Selecione uma imagem ou PDF da conta primeiro.";
+    return;
+  }
+  status.textContent = "Lendo a conta (pode levar alguns segundos)...";
+  try {
+    const imagesBase64 = arquivo.type === "application/pdf" ? await pdfArquivoParaImagensBase64(arquivo) : [await imagemArquivoParaBase64(arquivo)];
+    const res = await fetch("/interno/api/scan-conta", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tipo: "bess", images: imagesBase64.map((base64) => ({ base64, mimeType: "image/jpeg" })) }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      status.textContent = `Não foi possível ler a conta — ${data.error ?? "erro desconhecido"}.`;
+      return;
+    }
+
+    // Só preenche campo vazio (nunca sobrescreve o que o usuário já digitou) e nunca dispara
+    // eventos de "change" nos campos de busca ANEEL (distribuidora/subgrupo/modalidade/ICMS) —
+    // isso acionaria a busca de tarifa homologada e SOBRESCREVERIA as tarifas reais da conta
+    // escaneada por uma aproximação genérica. ICMS/PIS-COFINS aqui são só informativos.
+    const preenchidos = [];
+    if (data.cliente && !$("b-cliente").value) {
+      $("b-cliente").value = data.cliente;
+      preenchidos.push("cliente");
+    }
+    if (Number.isFinite(data.energia_ponta_kwh)) {
+      $("b-energia-ponta").value = data.energia_ponta_kwh;
+      preenchidos.push("energia ponta");
+    }
+    if (Number.isFinite(data.energia_fora_ponta_kwh)) {
+      $("b-energia-fora-ponta").value = data.energia_fora_ponta_kwh;
+      preenchidos.push("energia fora ponta");
+    }
+    if (Number.isFinite(data.demanda_contratada_kw)) {
+      $("b-demanda").value = data.demanda_contratada_kw;
+      preenchidos.push("demanda contratada");
+    }
+    if (Number.isFinite(data.tarifa_ponta_com_imposto)) {
+      $("b-tarifa-ponta").value = data.tarifa_ponta_com_imposto.toFixed(4);
+      preenchidos.push("tarifa ponta");
+    }
+    if (Number.isFinite(data.tarifa_fora_ponta_com_imposto)) {
+      $("b-tarifa-fora-ponta").value = data.tarifa_fora_ponta_com_imposto.toFixed(4);
+      preenchidos.push("tarifa fora ponta");
+    }
+    if (Number.isFinite(data.tarifa_demanda_com_imposto)) {
+      $("b-tarifa-demanda").value = data.tarifa_demanda_com_imposto.toFixed(2);
+      preenchidos.push("tarifa demanda");
+    }
+    if (Number.isFinite(data.reativo_excedente)) {
+      $("b-reativo").value = data.reativo_excedente;
+      preenchidos.push("reativo excedente");
+    }
+    if (Number.isFinite(data.iluminacao_publica)) {
+      $("b-iluminacao").value = data.iluminacao_publica;
+      preenchidos.push("iluminação pública");
+    }
+    if (Number.isFinite(data.icms_percent)) {
+      $("b-aneel-icms").value = data.icms_percent;
+      preenchidos.push("ICMS (referência)");
+    }
+    if (Number.isFinite(data.pis_cofins_percent)) {
+      $("b-aneel-piscofins").value = data.pis_cofins_percent;
+      preenchidos.push("PIS/COFINS (referência)");
+    }
+
+    if (!preenchidos.length) {
+      status.textContent = "Não consegui identificar dados nessa imagem — confira se é uma foto legível da conta, ou preencha manualmente.";
+      return;
+    }
+    status.innerHTML = `<span class="text-emerald-600 font-semibold">✓</span> Preenchido automaticamente: ${preenchidos.join(", ")}. <strong>Confira os valores antes de calcular.</strong>`;
+    computeBess();
+  } catch {
+    status.textContent = "Erro ao processar a imagem — tente novamente ou preencha manualmente.";
+  }
 }
 
 function computeBess() {

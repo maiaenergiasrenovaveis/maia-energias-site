@@ -901,6 +901,28 @@ const PROMPT_SCAN_CONTA = `Você extrai dados estruturados de contas de energia 
 }
 Se um campo não estiver visível ou você não tiver certeza, use null (para historico_consumo, use um array vazio). Não invente valores. IMPORTANTE: sua resposta inteira deve ser SOMENTE o objeto JSON — comece direto com "{" e termine com "}". Não escreva nenhuma frase de introdução, explicação, análise ou comentário antes ou depois do JSON.`;
 
+// Variante pra contas do Grupo A (alta tensão, com demanda contratada e tarifas separadas por
+// posto horário ponta/fora ponta) — layout bem diferente do Grupo B: em vez de um histórico de
+// 12 meses de consumo, o que importa aqui é o detalhamento de UM mês (o mês da fatura), com
+// consumo/demanda/tarifa por item na tabela "Detalhamento de valores" ou "Itens da fatura".
+const PROMPT_SCAN_CONTA_BESS = `Você extrai dados estruturados de contas de energia elétrica brasileiras de clientes do Grupo A (alta tensão, com demanda contratada e tarifas separadas por posto horário ponta/fora ponta — subgrupos A1 a A4, AS). Você vai receber uma ou mais imagens da conta (página inteira, eventualmente com um recorte ampliado de alguma região). Procure a tabela de detalhamento/itens da fatura (geralmente chamada "Detalhamento de valores", "Itens de fatura" ou similar), que lista cada item cobrado com quantidade, tarifa unitária e valor. Retorne APENAS um JSON (sem markdown, sem texto extra) no formato:
+{
+  "cliente": string ou null (o NOME DA EMPRESA titular da unidade consumidora, não o endereço/bairro),
+  "distribuidora": string ou null,
+  "uf": string ou null (sigla de 2 letras),
+  "energia_ponta_kwh": number ou null (consumo do mês em kWh no horário de PONTA — linha tipo "Consumo Ponta" ou "Energia Ponta TE"),
+  "energia_fora_ponta_kwh": number ou null (consumo do mês em kWh FORA de ponta — linha tipo "Consumo Fora Ponta" ou "Energia Fora Ponta TE"),
+  "demanda_contratada_kw": number ou null (a demanda CONTRATADA em kW — cuidado para não confundir com "Demanda Medida", "Demanda Faturada" ou "Ultrapassagem de Demanda", que são valores diferentes; se a conta mostrar demanda faturada maior que a contratada por ultrapassagem, use o valor CONTRATADO, não o faturado),
+  "tarifa_ponta_com_imposto": number ou null (tarifa unitária de energia ponta em R$/kWh, já com impostos, como cobrado na fatura),
+  "tarifa_fora_ponta_com_imposto": number ou null (tarifa unitária de energia fora ponta em R$/kWh, já com impostos),
+  "tarifa_demanda_com_imposto": number ou null (tarifa unitária de demanda em R$/kW, já com impostos — geralmente uma tarifa única de demanda contratada, mesmo em contas com modalidade Verde),
+  "reativo_excedente": number ou null (valor total em R$ cobrado por energia reativa excedente/ultrapassagem de reativo, se houver essa linha na fatura; senão null),
+  "iluminacao_publica": number ou null (valor em R$ da Contribuição de Iluminação Pública/COSIP),
+  "icms_percent": number ou null (alíquota de ICMS em %, da seção de tributos da conta),
+  "pis_cofins_percent": number ou null (soma das alíquotas de PIS + COFINS em %, se mostradas separadamente some as duas)
+}
+FORMATO NUMÉRICO BRASILEIRO — leia com cuidado: valores como "12.800,000" usam PONTO como separador de milhar e vírgula para decimal — isso é DOZE MIL E OITOCENTOS (12800), não 12,8. Se um campo não estiver visível ou você não tiver certeza, use null — nunca invente ou estime um valor plausível. IMPORTANTE: sua resposta inteira deve ser SOMENTE o objeto JSON — comece direto com "{" e termine com "}". Não escreva nenhuma frase de introdução, explicação, análise ou comentário antes ou depois do JSON.`;
+
 // GPT-4o-mini via um relay hospedado na Vercel (projeto separado: maia-scan-proxy), não mais
 // direto da Cloudflare nem via Workers AI. Motivo: uma sessão inteira de diagnóstico (chave sem
 // espaço, retry, timeout, User-Agent de navegador, AI Gateway da própria Cloudflare, hospedar a
@@ -917,6 +939,8 @@ async function handleScanConta(request, env) {
   if (!env.RELAY_SECRET) return jsonResponse({ error: "Leitura automática não configurada (falta RELAY_SECRET)." }, 500);
 
   const body = await request.json().catch(() => null);
+  const tipo = body?.tipo === "bess" ? "bess" : "solar";
+  const prompt = tipo === "bess" ? PROMPT_SCAN_CONTA_BESS : PROMPT_SCAN_CONTA;
   const imagens = Array.isArray(body?.images) ? body.images : [];
   if (!imagens.length) return jsonResponse({ error: "envie ao menos uma imagem em images" }, 400);
   // O front-end manda a página inteira + um recorte em alta resolução da tabela de consumo pra
@@ -940,7 +964,7 @@ async function handleScanConta(request, env) {
     const res = await fetch(VERCEL_RELAY_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "x-relay-secret": env.RELAY_SECRET },
-      body: JSON.stringify({ images: imagens, prompt: PROMPT_SCAN_CONTA }),
+      body: JSON.stringify({ images: imagens, prompt }),
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) {
@@ -974,6 +998,10 @@ async function handleScanConta(request, env) {
   // sendo devolvido como 1.059 (um vírgula zero cinco nove) em vez de 1059.
   if (Array.isArray(extraido?.historico_consumo)) {
     extraido.historico_consumo = extraido.historico_consumo.map((h) => (h && !Number.isInteger(h.kwh) && Number.isFinite(h.kwh) ? { ...h, kwh: Math.round(h.kwh * 1000) } : h));
+  }
+  for (const campo of ["energia_ponta_kwh", "energia_fora_ponta_kwh"]) {
+    const v = extraido?.[campo];
+    if (Number.isFinite(v) && !Number.isInteger(v)) extraido[campo] = Math.round(v * 1000);
   }
 
   return jsonResponse(extraido);

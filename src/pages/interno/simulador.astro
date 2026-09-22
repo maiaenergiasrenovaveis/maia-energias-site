@@ -281,6 +281,17 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
     <div id="painel-bess" class="hidden">
       <button type="button" class="voltar-btn text-xs font-semibold text-maia-blue-dark mb-4">← Trocar grupo tarifário</button>
 
+      <div class="rounded-xl bg-white border border-slate-200 p-5 mb-6">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Escanear conta de energia (opcional)</h2>
+        <p class="text-[11px] text-slate-500 mb-2">Envie uma foto, print ou PDF da conta antes de preencher — já adianta cliente, consumo ponta/fora ponta, demanda contratada e as tarifas (ponta/fora ponta/demanda/ICMS/PIS-COFINS) abaixo.</p>
+        <div class="flex items-center gap-2">
+          <input id="b-scan-conta-arquivo" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" class="flex-1 text-xs" />
+          <button type="button" id="b-scan-conta-btn" class="rounded-lg bg-maia-blue-dark hover:bg-maia-navy text-white font-semibold px-3 py-1.5 text-xs whitespace-nowrap">Escanear</button>
+        </div>
+        <p id="b-scan-conta-status" class="text-[11px] mt-2 text-slate-400"></p>
+        <p class="text-[10px] text-slate-400 mt-1">Lê o detalhamento de valores do mês da fatura (não um histórico de 12 meses), via OpenAI (GPT-4o-mini). Sempre confira os valores preenchidos antes de calcular.</p>
+      </div>
+
       <div class="grid lg:grid-cols-2 gap-6 mb-6">
         <div class="rounded-xl bg-white border border-slate-200 p-5">
           <h2 class="text-sm font-bold uppercase tracking-wide text-maia-navy border-l-4 border-maia-green pl-3 mb-4">Cliente</h2>
