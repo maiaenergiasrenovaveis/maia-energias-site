@@ -1631,6 +1631,7 @@ function computeCarregador() {
     metodoInstalacao: $("c-metodo").value,
     temperaturaAmbiente: Number($("c-temperatura").value),
     circuitosAgrupados: Number($("c-agrupamento").value) || 1,
+    carregadorTemProtecaoInterna: $("c-dr-interno").value === "sim",
   });
 
   $("c-result-cards").innerHTML = `
@@ -1682,6 +1683,7 @@ async function exportarPdfCarregador() {
     ["Temperatura ambiente/solo", `${num(Number($("c-temperatura").value), 0)} °C`],
     ["Circuitos agrupados", $("c-agrupamento").value],
     ["Queda de tensão máxima admissível", `${num(Number($("c-queda-max").value), 1)}%`],
+    ["Carregador com DR Tipo B/RDC-DD integrado?", $("c-dr-interno").value === "sim" ? "Sim (confirmado na ficha técnica do fabricante)" : "Não / não confirmado"],
   ];
 
   const resultado = [
@@ -1717,7 +1719,7 @@ async function exportarPdfCarregador() {
     ],
     avisos: r.avisos,
     notaRodape:
-      "Dimensionamento de referência a partir dos critérios gerais da NBR 5410 (ampacidade — métodos B1/C/D/F, isolação PVC 70°C — e fatores de correção de temperatura/agrupamento), para pré-orçamento e conversa comercial. Não substitui projeto elétrico executivo assinado por engenheiro responsável (ART). Ampacidade e resistividade do alumínio estimadas a partir da tabela de cobre (fator ~0,78) — confirme com a tabela oficial. Conexões em alumínio exigem conectores bimetálicos e composto antioxidante. DR fixado em Tipo A partindo do princípio de que o carregador já traz proteção interna Tipo B/RDC-DD — confirme na ficha técnica do equipamento. Confirme sempre seção final, disjuntor, DPS e DR com o projetista responsável.",
+      "Dimensionamento de referência a partir dos critérios gerais da NBR 5410 (ampacidade — métodos B1/C/D/F, isolação PVC 70°C — e fatores de correção de temperatura/agrupamento) e da NBR 17019:2022 (específica para alimentação de veículos elétricos), para pré-orçamento e conversa comercial. Não substitui projeto elétrico executivo assinado por engenheiro responsável (ART). Ampacidade e resistividade do alumínio estimadas a partir da tabela de cobre (fator ~0,78) — confirme com a tabela oficial. Conexões em alumínio exigem conectores bimetálicos e composto antioxidante. O DR externo nunca é dispensado pela NBR 17019 — seu tipo (A ou B) depende de o carregador já ter proteção interna equivalente a DR Tipo B/RDC-DD, conforme indicado na tabela de parâmetros de entrada. Confirme sempre seção final, disjuntor, DPS e DR com o projetista responsável.",
     fileName: `ficha-tecnica-carregador-${(cliente || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`,
   });
 }

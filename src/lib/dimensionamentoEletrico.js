@@ -156,6 +156,11 @@ function secaoTerra(secaoFaseMm2) {
  * @param {number} p.circuitosAgrupados - nº de circuitos no mesmo eletroduto/bandeja/vala (mín. 1)
  * @param {number} [p.fatorContinuidade] - margem para carga contínua (padrão 1,25 — ver nota acima; não é um valor fixado pela NBR5410)
  * @param {"cobre"|"aluminio"} [p.material] - material do condutor (padrão cobre)
+ * @param {boolean} [p.carregadorTemProtecaoInterna] - se o carregador já tem DR Tipo B (ou RDC-DD
+ *   conforme IEC 62955) integrado de fábrica. A NBR 17019:2022 nunca dispensa o DR EXTERNO, mas
+ *   permite que ele seja Tipo A quando essa proteção interna contra corrente de fuga contínua já
+ *   existe no próprio equipamento; sem essa confirmação, o DR externo precisa ser Tipo B. Padrão
+ *   false (opção mais segura) — só vira "A" se o usuário confirmar a proteção interna do carregador.
  */
 export function calcularDimensionamentoEletrico(p) {
   const avisos = [];
@@ -247,6 +252,24 @@ export function calcularDimensionamentoEletrico(p) {
     drNominal = DR_PADRAO[DR_PADRAO.length - 1];
   }
 
+  // NBR 17019:2022 não dispensa o DR externo em nenhum caso — a diferença é só o TIPO exigido.
+  // Corrente de fuga contínua (DC) de um carregador em falha não é detectada por um DR comum
+  // (Tipo AC/A), que satura com componente contínua; daí a exigência de Tipo B, A MENOS que o
+  // próprio carregador já detecte e interrompa essa fuga internamente (DR Tipo B integrado, ou
+  // um RDC-DD conforme IEC 62955) — nesse caso o DR externo só precisa cobrir fuga CA normal,
+  // e pode ser Tipo A.
+  const carregadorTemProtecaoInterna = !!p.carregadorTemProtecaoInterna;
+  const tipoDr = carregadorTemProtecaoInterna ? "A" : "B";
+  if (carregadorTemProtecaoInterna) {
+    avisos.push(
+      "DR externo Tipo A assumido com base na informação de que o carregador já possui proteção interna equivalente a DR Tipo B/RDC-DD (IEC 62955) — confirme essa característica na ficha técnica do fabricante antes de aplicar em campo."
+    );
+  } else {
+    avisos.push(
+      "DR externo Tipo B (padrão mais seguro, conforme NBR 17019:2022) — se o fabricante confirmar que o carregador já possui DR Tipo B/RDC-DD integrado, o DR externo pode ser rebaixado para Tipo A."
+    );
+  }
+
   return {
     tipoLigacao,
     material,
@@ -269,7 +292,7 @@ export function calcularDimensionamentoEletrico(p) {
     disjuntorA: disjuntor,
     disjuntorCurva: "C",
     dps: { classe: "II", ucV: dpsUc, inKa: 5, imaxKa: dpsImaxKa },
-    dr: { tipo: "A", sensibilidadeMa: 30, nominalA: drNominal },
+    dr: { tipo: tipoDr, sensibilidadeMa: 30, nominalA: drNominal },
     avisos,
   };
 }
