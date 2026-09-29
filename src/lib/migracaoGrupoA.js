@@ -62,6 +62,7 @@ export function calcularInvestimentoMigracao(c) {
  * @param {number} p.tarifaTusd - R$/kWh, encargo de fio (continua devido mesmo no ML)
  * @param {number} p.iluminacaoPublica
  * @param {number} p.outros
+ * @param {number} [p.multaUltrapassagem] - R$/mês, multa por ultrapassagem de demanda no cenário Grupo A
  * @param {number} p.investimentoMigracao - R$
  * @param {number} p.horizonteAnos
  * @param {number} p.reajusteTarifario - %a.a., aplicado às tarifas dos dois grupos
@@ -119,6 +120,7 @@ export function calcularCenariosMigracao(p) {
       tarifaTusd,
       mercadoLivre: usarMercadoLivre,
       reativoExcedente: p.reativoExcedente ?? 0,
+      multaUltrapassagem: p.multaUltrapassagem ?? 0,
       iluminacaoPublica: p.iluminacaoPublica,
       outros: p.outros,
     });

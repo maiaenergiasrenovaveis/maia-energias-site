@@ -53,9 +53,22 @@ const ICMS_REFERENCIA_POR_UF = {
   SP: 18, SE: 20, TO: 20,
 };
 
-const ultimasTarifasBrutasAneel = new Map(); // statusId -> {tarifaPonta, tarifaForaPonta, tarifaDemanda} sem imposto
+const ultimasTarifasBrutasAneel = new Map(); // statusId -> {tarifaPonta, tarifaForaPonta, tarifaDemanda, tePonta, tusdPonta, teForaPonta, tusdForaPonta} sem imposto
 
-function aplicarImpostoTarifaAneel({ statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId, tarifaTusdId }) {
+function aplicarImpostoTarifaAneel({
+  statusId,
+  ufId,
+  icmsId,
+  pisCofinsId,
+  tarifaPontaId,
+  tarifaForaPontaId,
+  tarifaDemandaId,
+  tarifaTusdId,
+  tePontaId,
+  tusdPontaId,
+  teForaPontaId,
+  tusdForaPontaId,
+}) {
   const bruta = ultimasTarifasBrutasAneel.get(statusId);
   if (!bruta) return;
   const icmsPercent = Number($(icmsId).value) / 100 || 0;
@@ -66,9 +79,30 @@ function aplicarImpostoTarifaAneel({ statusId, ufId, icmsId, pisCofinsId, tarifa
   $(tarifaForaPontaId).value = (bruta.tarifaForaPonta / fatorGrossUp).toFixed(4);
   if (bruta.tarifaDemanda != null) $(tarifaDemandaId).value = (bruta.tarifaDemanda / fatorGrossUp).toFixed(2);
   if (tarifaTusdId && $(tarifaTusdId) && bruta.tarifaTusd != null) $(tarifaTusdId).value = (bruta.tarifaTusd / fatorGrossUp).toFixed(4);
+  if (tePontaId && $(tePontaId) && bruta.tePonta != null) $(tePontaId).value = (bruta.tePonta / fatorGrossUp).toFixed(4);
+  if (tusdPontaId && $(tusdPontaId) && bruta.tusdPonta != null) $(tusdPontaId).value = (bruta.tusdPonta / fatorGrossUp).toFixed(4);
+  if (teForaPontaId && $(teForaPontaId) && bruta.teForaPonta != null) $(teForaPontaId).value = (bruta.teForaPonta / fatorGrossUp).toFixed(4);
+  if (tusdForaPontaId && $(tusdForaPontaId) && bruta.tusdForaPonta != null) $(tusdForaPontaId).value = (bruta.tusdForaPonta / fatorGrossUp).toFixed(4);
 }
 
-async function buscarTarifaAneel({ distribuidoraId, subgrupoId, modalidadeId, statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId, tarifaTusdId, onDone }) {
+async function buscarTarifaAneel({
+  distribuidoraId,
+  subgrupoId,
+  modalidadeId,
+  statusId,
+  ufId,
+  icmsId,
+  pisCofinsId,
+  tarifaPontaId,
+  tarifaForaPontaId,
+  tarifaDemandaId,
+  tarifaTusdId,
+  tePontaId,
+  tusdPontaId,
+  teForaPontaId,
+  tusdForaPontaId,
+  onDone,
+}) {
   const distribuidora = $(distribuidoraId).value.trim();
   const subgrupo = $(subgrupoId).value;
   const modalidade = $(modalidadeId).value;
@@ -88,8 +122,17 @@ async function buscarTarifaAneel({ distribuidoraId, subgrupoId, modalidadeId, st
       status.textContent = `Não encontrado — confira o nome da distribuidora (${data.error ?? "erro"}).`;
       return;
     }
-    ultimasTarifasBrutasAneel.set(statusId, { tarifaPonta: data.tarifaPonta, tarifaForaPonta: data.tarifaForaPonta, tarifaDemanda: data.tarifaDemanda, tarifaTusd: data.tarifaTusd });
-    aplicarImpostoTarifaAneel({ statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId, tarifaTusdId });
+    ultimasTarifasBrutasAneel.set(statusId, {
+      tarifaPonta: data.tarifaPonta,
+      tarifaForaPonta: data.tarifaForaPonta,
+      tarifaDemanda: data.tarifaDemanda,
+      tarifaTusd: data.tarifaTusd,
+      tePonta: data.tePonta,
+      tusdPonta: data.tusdPonta,
+      teForaPonta: data.teForaPonta,
+      tusdForaPonta: data.tusdForaPonta,
+    });
+    aplicarImpostoTarifaAneel({ statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId, tarifaTusdId, tePontaId, tusdPontaId, teForaPontaId, tusdForaPontaId });
     const vigInicio = new Date(data.vigenciaInicio + "T00:00:00").toLocaleDateString("pt-BR");
     const vigFim = new Date(data.vigenciaFim + "T00:00:00").toLocaleDateString("pt-BR");
     status.innerHTML = `<span class="text-emerald-600 font-semibold">✓</span> ${data.fonte} — vigência ${vigInicio} a ${vigFim} (valores sem imposto; ICMS/PIS-COFINS aplicados acima).`;
@@ -97,6 +140,19 @@ async function buscarTarifaAneel({ distribuidoraId, subgrupoId, modalidadeId, st
   } catch {
     status.textContent = "Erro ao buscar na ANEEL — preencha manualmente.";
   }
+}
+
+// Mantém "Total = TUSD + TE" sempre que um dos dois componentes é editado — o total continua
+// sendo o campo que os cálculos de fato usam (e continua editável direto, pra quem só tem o
+// valor total, ex. vindo de uma conta escaneada, sem o detalhamento por componente).
+function ligarSomaTusdTe(tusdId, teId, totalId) {
+  const atualizar = () => {
+    const tusd = Number($(tusdId).value) || 0;
+    const te = Number($(teId).value) || 0;
+    $(totalId).value = (tusd + te).toFixed(4);
+  };
+  $(tusdId).addEventListener("input", atualizar);
+  $(teId).addEventListener("input", atualizar);
 }
 
 // ---------- Seleção de grupo tarifário ----------
@@ -915,24 +971,37 @@ function initBess() {
     computeBess();
   });
 
+  // Precisa ser registrado ANTES do listener genérico abaixo: no mesmo evento de input, os
+  // listeners disparam na ordem de registro — se o recálculo genérico rodasse primeiro, ele
+  // leria o campo "total" ainda com o valor antigo (só ficaria correto depois do próximo evento).
+  ligarSomaTusdTe("b-tarifa-ponta-tusd", "b-tarifa-ponta-te", "b-tarifa-ponta");
+  ligarSomaTusdTe("b-tarifa-fora-ponta-tusd", "b-tarifa-fora-ponta-te", "b-tarifa-fora-ponta");
+
   document.querySelectorAll("#painel-bess input, #painel-bess select").forEach((el) => {
     el.addEventListener("input", computeBess);
   });
 
   carregarDistribuidorasAneel("lista-distribuidoras-aneel");
+  const camposAneelBess = {
+    statusId: "b-aneel-status",
+    ufId: "b-aneel-uf",
+    icmsId: "b-aneel-icms",
+    pisCofinsId: "b-aneel-piscofins",
+    tarifaPontaId: "b-tarifa-ponta",
+    tarifaForaPontaId: "b-tarifa-fora-ponta",
+    tarifaDemandaId: "b-tarifa-demanda",
+    tarifaTusdId: "b-tarifa-tusd",
+    tePontaId: "b-tarifa-ponta-te",
+    tusdPontaId: "b-tarifa-ponta-tusd",
+    teForaPontaId: "b-tarifa-fora-ponta-te",
+    tusdForaPontaId: "b-tarifa-fora-ponta-tusd",
+  };
   const buscarTarifaBessAneel = () =>
     buscarTarifaAneel({
       distribuidoraId: "b-aneel-distribuidora",
       subgrupoId: "b-aneel-subgrupo",
       modalidadeId: "b-aneel-modalidade",
-      statusId: "b-aneel-status",
-      ufId: "b-aneel-uf",
-      icmsId: "b-aneel-icms",
-      pisCofinsId: "b-aneel-piscofins",
-      tarifaPontaId: "b-tarifa-ponta",
-      tarifaForaPontaId: "b-tarifa-fora-ponta",
-      tarifaDemandaId: "b-tarifa-demanda",
-      tarifaTusdId: "b-tarifa-tusd",
+      ...camposAneelBess,
       onDone: computeBess,
     });
   ["b-aneel-distribuidora", "b-aneel-subgrupo", "b-aneel-modalidade"].forEach((id) => {
@@ -942,31 +1011,13 @@ function initBess() {
     if (!$("b-aneel-icms").dataset.touched) {
       $("b-aneel-icms").value = ICMS_REFERENCIA_POR_UF[$("b-aneel-uf").value] ?? "";
     }
-    aplicarImpostoTarifaAneel({
-      statusId: "b-aneel-status",
-      ufId: "b-aneel-uf",
-      icmsId: "b-aneel-icms",
-      pisCofinsId: "b-aneel-piscofins",
-      tarifaPontaId: "b-tarifa-ponta",
-      tarifaForaPontaId: "b-tarifa-fora-ponta",
-      tarifaDemandaId: "b-tarifa-demanda",
-      tarifaTusdId: "b-tarifa-tusd",
-    });
+    aplicarImpostoTarifaAneel(camposAneelBess);
     computeBess();
   });
   ["b-aneel-icms", "b-aneel-piscofins"].forEach((id) => {
     $(id).addEventListener("input", () => {
       $(id).dataset.touched = "1";
-      aplicarImpostoTarifaAneel({
-        statusId: "b-aneel-status",
-        ufId: "b-aneel-uf",
-        icmsId: "b-aneel-icms",
-        pisCofinsId: "b-aneel-piscofins",
-        tarifaPontaId: "b-tarifa-ponta",
-        tarifaForaPontaId: "b-tarifa-fora-ponta",
-        tarifaDemandaId: "b-tarifa-demanda",
-        tarifaTusdId: "b-tarifa-tusd",
-      });
+      aplicarImpostoTarifaAneel(camposAneelBess);
       computeBess();
     });
   });
@@ -1108,6 +1159,7 @@ function computeBess() {
     tarifaForaPonta: Number($("b-tarifa-fora-ponta").value) || 0,
     tarifaDemanda: Number($("b-tarifa-demanda").value) || 0,
     reativoExcedente: Number($("b-reativo").value) || 0,
+    multaUltrapassagem: Number($("b-multa-ultrapassagem").value) || 0,
     iluminacaoPublica: Number($("b-iluminacao").value) || 0,
     outros: Number($("b-outros").value) || 0,
     usarMercadoLivre: $("b-usar-ml").checked,
@@ -1269,13 +1321,15 @@ async function exportarPdfBess() {
   const cliente = $("b-cliente").value || "Cliente";
   const mlSufixo = cenarios.usarMercadoLivre ? " + Mercado Livre" : "";
 
+  const multaUltrapassagem = Number($("b-multa-ultrapassagem").value) || 0;
   const diagnostico = [
     `Demanda contratada atual: ${num(Number($("b-demanda").value), 0)} kW, com consumo de ${num(Number($("b-energia-ponta").value), 0)} kWh/mês no horário de ponta.`,
     `Tarifa de ponta ${num(Number($("b-tarifa-ponta").value), 2)} vezes mais cara que a tarifa fora de ponta, penalizando o uso de energia nesse período.`,
+    multaUltrapassagem > 0 ? `Cliente pagando atualmente ${brl2(multaUltrapassagem)}/mês em multa por ultrapassagem de demanda.` : null,
     cenarios.usarMercadoLivre
       ? "Cliente ainda não migrado para o Mercado Livre de energia, pagando tarifas do mercado regulado."
       : "Cliente operando integralmente no ambiente de contratação regulado (ACR).",
-  ];
+  ].filter(Boolean);
 
   const corrigirReativo = $("b-corrigir-reativo").checked;
   const geracaoSolarBruta = $("b-usar-solar").checked ? Number($("b-solar-geracao").value) || 0 : 0;
@@ -1285,7 +1339,7 @@ async function exportarPdfBess() {
 
   const escopo = [
     `Instalação de banco de baterias (BESS) de ${num(bess.potenciaRecomendadaKw, 1)} kW / ${num(bess.capacidadeFinalKwh, 1)} kWh para deslocamento de carga na ponta (peak shaving).`,
-    `Redução da demanda contratada de ${num(Number($("b-demanda").value), 0)} kW para ${num(Number($("b-demanda-pos").value), 0)} kW.`,
+    `Redução da demanda contratada de ${num(Number($("b-demanda").value), 0)} kW para ${num(Number($("b-demanda-pos").value), 0)} kW${multaUltrapassagem > 0 ? ", eliminando a multa por ultrapassagem de demanda" : ""}.`,
     corrigirReativo ? "Correção do fator de potência via o próprio inversor do BESS, eliminando a cobrança de reativo excedente." : null,
     geracaoSolarBruta > 0
       ? solarZeroGrid
@@ -1395,6 +1449,10 @@ function initMigracao() {
     computeMigracao();
   });
 
+  // Precisa ser registrado ANTES do listener genérico abaixo — mesmo motivo do painel BESS.
+  ligarSomaTusdTe("m-tarifa-ponta-tusd", "m-tarifa-ponta-te", "m-tarifa-ponta");
+  ligarSomaTusdTe("m-tarifa-fora-ponta-tusd", "m-tarifa-fora-ponta-te", "m-tarifa-fora-ponta");
+
   document.querySelectorAll("#painel-migracao input, #painel-migracao select").forEach((el) => {
     el.addEventListener("input", computeMigracao);
   });
@@ -1412,6 +1470,10 @@ function initMigracao() {
     tarifaForaPontaId: "m-tarifa-fora-ponta",
     tarifaDemandaId: "m-tarifa-demanda",
     tarifaTusdId: "m-tarifa-tusd",
+    tePontaId: "m-tarifa-ponta-te",
+    tusdPontaId: "m-tarifa-ponta-tusd",
+    teForaPontaId: "m-tarifa-fora-ponta-te",
+    tusdForaPontaId: "m-tarifa-fora-ponta-tusd",
   };
   ["m-aneel-distribuidora", "m-aneel-subgrupo", "m-aneel-modalidade"].forEach((id) => {
     $(id).addEventListener("change", () => buscarTarifaAneel({ ...camposAneelMigracao, onDone: computeMigracao }));
@@ -1467,6 +1529,7 @@ function computeMigracao() {
     tarifaForaPonta: Number($("m-tarifa-fora-ponta").value) || 0,
     tarifaDemanda: Number($("m-tarifa-demanda").value) || 0,
     reativoExcedente: Number($("m-reativo").value) || 0,
+    multaUltrapassagem: Number($("m-multa-ultrapassagem").value) || 0,
     iluminacaoPublica: Number($("m-iluminacao").value) || 0,
     outros: Number($("m-outros").value) || 0,
     usarMercadoLivre: $("m-usar-ml").checked,

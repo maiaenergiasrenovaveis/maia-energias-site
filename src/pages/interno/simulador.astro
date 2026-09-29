@@ -388,10 +388,18 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
             </div>
             <p class="text-[10px] text-amber-700 mt-1">⚠ Alíquota de ICMS é só uma referência por estado (varia por classe de consumo e pode ter adicional de fundo estadual) — confirme a vigente antes de fechar proposta. As tarifas acima são recalculadas com imposto assim que UF/ICMS/PIS-COFINS mudam.</p>
           </div>
-          <div class="grid grid-cols-2 gap-2 text-sm">
-            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa ponta (R$/kWh)</label><input id="b-tarifa-ponta" type="number" step="0.0001" value="3.04" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
-            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa fora ponta (R$/kWh)</label><input id="b-tarifa-fora-ponta" type="number" step="0.0001" value="0.62" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div class="grid grid-cols-3 gap-2 text-sm">
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Ponta TUSD (R$/kWh)</label><input id="b-tarifa-ponta-tusd" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Ponta TE (R$/kWh)</label><input id="b-tarifa-ponta-te" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Ponta total (R$/kWh)</label><input id="b-tarifa-ponta" type="number" step="0.0001" value="3.04" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Fora ponta TUSD (R$/kWh)</label><input id="b-tarifa-fora-ponta-tusd" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Fora ponta TE (R$/kWh)</label><input id="b-tarifa-fora-ponta-te" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Fora ponta total (R$/kWh)</label><input id="b-tarifa-fora-ponta" type="number" step="0.0001" value="0.62" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-1">TUSD/TE preenchidos pela busca ANEEL acima; editar qualquer um dos dois recalcula o total automaticamente (o total continua editável direto também, ex. para quem só tem o valor já somado).</p>
+          <div class="grid grid-cols-2 gap-2 text-sm mt-2">
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa demanda (R$/kW)</label><input id="b-tarifa-demanda" type="number" step="0.01" value="30.07" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Multa ultrapassagem demanda (R$/mês)</label><input id="b-multa-ultrapassagem" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Reativo excedente (R$/mês)</label><input id="b-reativo" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Iluminação púb. (R$/mês)</label><input id="b-iluminacao" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Outros (R$/mês)</label><input id="b-outros" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
@@ -524,6 +532,7 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Energia ponta (kWh/mês)</label><input id="m-energia-ponta" type="number" value="1500" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Energia fora ponta (kWh/mês)</label><input id="m-energia-fora-ponta" type="number" value="13500" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Nova demanda contratada (kW)</label><input id="m-demanda" type="number" value="100" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Multa ultrapassagem demanda (R$/mês)</label><input id="m-multa-ultrapassagem" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Reativo excedente (R$/mês)</label><input id="m-reativo" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Iluminação púb. (R$/mês)</label><input id="m-iluminacao" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
             <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Outros (R$/mês)</label><input id="m-outros" type="number" step="0.01" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
@@ -583,11 +592,16 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
             </div>
             <p class="text-[10px] text-amber-700 mt-1">⚠ Alíquota de ICMS é só uma referência por estado (varia por classe de consumo e pode ter adicional de fundo estadual) — confirme a vigente antes de fechar proposta. As tarifas acima são recalculadas com imposto assim que UF/ICMS/PIS-COFINS mudam.</p>
           </div>
-          <div class="grid grid-cols-2 gap-2 text-sm">
-            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa ponta (R$/kWh)</label><input id="m-tarifa-ponta" type="number" step="0.0001" value="3.04" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
-            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa fora ponta (R$/kWh)</label><input id="m-tarifa-fora-ponta" type="number" step="0.0001" value="0.62" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
-            <div class="col-span-2"><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa demanda (R$/kW)</label><input id="m-tarifa-demanda" type="number" step="0.01" value="30.07" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+          <div class="grid grid-cols-3 gap-2 text-sm">
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Ponta TUSD (R$/kWh)</label><input id="m-tarifa-ponta-tusd" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Ponta TE (R$/kWh)</label><input id="m-tarifa-ponta-te" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Ponta total (R$/kWh)</label><input id="m-tarifa-ponta" type="number" step="0.0001" value="3.04" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Fora ponta TUSD (R$/kWh)</label><input id="m-tarifa-fora-ponta-tusd" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Fora ponta TE (R$/kWh)</label><input id="m-tarifa-fora-ponta-te" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Fora ponta total (R$/kWh)</label><input id="m-tarifa-fora-ponta" type="number" step="0.0001" value="0.62" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+            <div class="col-span-3"><label class="block text-[11px] font-semibold text-slate-500 mb-1">Tarifa demanda (R$/kW)</label><input id="m-tarifa-demanda" type="number" step="0.01" value="30.07" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
           </div>
+          <p class="text-[10px] text-slate-400 mt-1">TUSD/TE preenchidos pela busca ANEEL acima; editar qualquer um dos dois recalcula o total automaticamente (o total continua editável direto também).</p>
           <label class="flex items-center gap-2 mt-3 text-sm">
             <input id="m-usar-ml" type="checkbox" class="h-4 w-4" />
             <span class="font-semibold text-slate-600">Considerar migração já com Mercado Livre</span>

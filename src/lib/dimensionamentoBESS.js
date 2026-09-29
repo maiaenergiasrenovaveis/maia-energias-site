@@ -64,6 +64,7 @@ export function calcularBESS(p) {
  * @param {boolean} c.mercadoLivre - se true, usa tarifaMercadoLivre em vez das tarifas ponta/fora ponta
  * @param {number} c.tarifaMercadoLivre - R$/kWh (só a energia/TE negociada no Mercado Livre)
  * @param {number} c.tarifaTusd - R$/kWh (fio/TUSD, sempre pago à distribuidora local — mesmo no Mercado Livre)
+ * @param {number} [c.multaUltrapassagem] - R$/mês, multa por ultrapassagem de demanda (medida acima da contratada)
  */
 export function calcularContaGrupoA(c) {
   const energiaTotal = c.energiaPontaKwh + c.energiaForaPontaKwh;
@@ -73,7 +74,7 @@ export function calcularContaGrupoA(c) {
     ? energiaTotal * (c.tarifaMercadoLivre + (c.tarifaTusd ?? 0))
     : c.energiaPontaKwh * c.tarifaPonta + c.energiaForaPontaKwh * c.tarifaForaPonta;
   const custoDemanda = c.demandaContratadaKw * c.tarifaDemanda;
-  const total = custoEnergia + custoDemanda + (c.reativoExcedente ?? 0) + (c.iluminacaoPublica ?? 0) + (c.outros ?? 0);
+  const total = custoEnergia + custoDemanda + (c.reativoExcedente ?? 0) + (c.multaUltrapassagem ?? 0) + (c.iluminacaoPublica ?? 0) + (c.outros ?? 0);
   return { custoEnergia, custoDemanda, total };
 }
 
@@ -102,6 +103,7 @@ export function calcularCenariosGrupoA(p) {
     demandaContratadaKw: p.demandaContratadaKw,
     tarifaDemanda: p.tarifaDemanda,
     reativoExcedente: p.reativoExcedente ?? 0,
+    multaUltrapassagem: p.multaUltrapassagem ?? 0,
     iluminacaoPublica: p.iluminacaoPublica ?? 0,
     outros: p.outros ?? 0,
   };
@@ -154,6 +156,10 @@ export function calcularCenariosGrupoA(p) {
       energiaForaPontaKwh: energiaForaPontaComBess,
       demandaContratadaKw: p.demandaContratadaKwPosBess ?? base.demandaContratadaKw,
       reativoExcedente: corrigirReativo ? 0 : base.reativoExcedente,
+      // A multa some junto com o ajuste de demanda: resiza a contratada + peak shaving evita
+      // ultrapassar de novo — não é uma correção independente, é consequência direta do mesmo
+      // ajuste (por isso não tem uma flag própria como corrigirReativo).
+      multaUltrapassagem: 0,
       tarifaPonta,
       tarifaForaPonta,
       tarifaMercadoLivre,
@@ -250,6 +256,7 @@ export function calcularEscadaReducoesGrupoA(p) {
     energiaPontaKwh: p.energiaPontaKwh,
     energiaForaPontaKwh: p.energiaForaPontaKwh,
     reativoExcedente: p.reativoExcedente ?? 0,
+    multaUltrapassagem: p.multaUltrapassagem ?? 0,
     mercadoLivre: false,
   };
   const calcularTotal = () =>
@@ -272,7 +279,9 @@ export function calcularEscadaReducoesGrupoA(p) {
     passos.push({ label, total, reducao });
   };
 
-  estado = { ...estado, demandaContratadaKw: demandaPosBess };
+  // A multa de ultrapassagem some junto com o ajuste de demanda, não como passo à parte — é
+  // consequência direta de resizar a contratada + peak shaving, igual em calcularCenariosGrupoA.
+  estado = { ...estado, demandaContratadaKw: demandaPosBess, multaUltrapassagem: 0 };
   passo("Ajuste de demanda");
 
   const energiaCargaBess = p.energiaPontaKwh / rte;

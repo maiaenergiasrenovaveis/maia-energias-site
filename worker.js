@@ -856,13 +856,19 @@ async function handleAneelTarifas(request) {
 
   if (!linhaForaPonta) return jsonResponse({ error: "não encontrei a tarifa de energia para essa combinação" }, 404);
 
-  // Valores vêm em R$/MWh — divide por 1000 pra virar R$/kWh.
-  const tarifaForaPonta = (parseNumeroBr(linhaForaPonta.VlrTE) + parseNumeroBr(linhaForaPonta.VlrTUSD)) / 1000;
-  const tarifaPonta = linhaPonta ? (parseNumeroBr(linhaPonta.VlrTE) + parseNumeroBr(linhaPonta.VlrTUSD)) / 1000 : tarifaForaPonta;
+  // Valores vêm em R$/MWh — divide por 1000 pra virar R$/kWh. TE e TUSD são mantidos separados
+  // (além da soma) porque a equipe comercial confere/edita esses dois componentes de forma
+  // independente na proposta (ex.: só o TUSD continua devido à distribuidora no Mercado Livre).
+  const teForaPonta = parseNumeroBr(linhaForaPonta.VlrTE) / 1000;
+  const tusdForaPonta = parseNumeroBr(linhaForaPonta.VlrTUSD) / 1000;
+  const tarifaForaPonta = teForaPonta + tusdForaPonta;
+  const tePonta = linhaPonta ? parseNumeroBr(linhaPonta.VlrTE) / 1000 : teForaPonta;
+  const tusdPonta = linhaPonta ? parseNumeroBr(linhaPonta.VlrTUSD) / 1000 : tusdForaPonta;
+  const tarifaPonta = linhaPonta ? tePonta + tusdPonta : tarifaForaPonta;
   const tarifaDemanda = linhaDemanda ? parseNumeroBr(linhaDemanda.VlrTUSD) : null;
-  // Só o componente TUSD (sem TE) da fora ponta — é o que continua devido à distribuidora
-  // quando o cliente migra pro Mercado Livre (só a energia/TE é negociada livremente lá).
-  const tarifaTusd = parseNumeroBr(linhaForaPonta.VlrTUSD) / 1000;
+  // tarifaTusd mantido por compatibilidade (era o único componente TUSD exposto antes desta
+  // mudança, usado no campo de TUSD do Mercado Livre) — igual a tusdForaPonta.
+  const tarifaTusd = tusdForaPonta;
 
   return new Response(
     JSON.stringify({
@@ -870,6 +876,10 @@ async function handleAneelTarifas(request) {
       tarifaForaPonta,
       tarifaDemanda,
       tarifaTusd,
+      tePonta,
+      tusdPonta,
+      teForaPonta,
+      tusdForaPonta,
       vigenciaInicio: vigenciaMaisRecente,
       vigenciaFim: atuais[0].DatFimVigencia,
       fonte: `ANEEL — ${distribuidora} (${subgrupo}/${modalidade})`,
