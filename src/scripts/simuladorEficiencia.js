@@ -1338,8 +1338,8 @@ async function exportarPdfBess() {
   const geracaoSolarMensalKwh = geracaoSolarBruta * (solarZeroGrid ? 1 : solarSimultaneidade);
 
   const escopo = [
-    `Instalação de banco de baterias (BESS) de ${num(bess.potenciaRecomendadaKw, 1)} kW / ${num(bess.capacidadeFinalKwh, 1)} kWh para deslocamento de carga na ponta (peak shaving).`,
-    `Redução da demanda contratada de ${num(Number($("b-demanda").value), 0)} kW para ${num(Number($("b-demanda-pos").value), 0)} kW${multaUltrapassagem > 0 ? ", eliminando a multa por ultrapassagem de demanda" : ""}.`,
+    `Instalação de banco de baterias (BESS) de ${num(bess.potenciaRecomendadaKw, 1)} kW / ${num(bess.capacidadeFinalKwh, 1)} kWh para deslocamento de carga na ponta (peak shaving)${multaUltrapassagem > 0 ? ", eliminando a multa por ultrapassagem de demanda" : ""}.`,
+    `Redução da demanda contratada de ${num(Number($("b-demanda").value), 0)} kW para ${num(Number($("b-demanda-pos").value), 0)} kW.`,
     corrigirReativo ? "Correção do fator de potência via o próprio inversor do BESS, eliminando a cobrança de reativo excedente." : null,
     geracaoSolarBruta > 0
       ? solarZeroGrid

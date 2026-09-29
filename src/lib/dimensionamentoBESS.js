@@ -156,9 +156,9 @@ export function calcularCenariosGrupoA(p) {
       energiaForaPontaKwh: energiaForaPontaComBess,
       demandaContratadaKw: p.demandaContratadaKwPosBess ?? base.demandaContratadaKw,
       reativoExcedente: corrigirReativo ? 0 : base.reativoExcedente,
-      // A multa some junto com o ajuste de demanda: resiza a contratada + peak shaving evita
-      // ultrapassar de novo — não é uma correção independente, é consequência direta do mesmo
-      // ajuste (por isso não tem uma flag própria como corrigirReativo).
+      // Multa de ultrapassagem some no cenário "com BESS": é o peak shaving em si que evita
+      // passar da demanda contratada, não uma correção independente que precise de flag própria
+      // (o valor contratado pode até ficar igual — o que muda é nunca mais ultrapassá-lo).
       multaUltrapassagem: 0,
       tarifaPonta,
       tarifaForaPonta,
@@ -279,13 +279,15 @@ export function calcularEscadaReducoesGrupoA(p) {
     passos.push({ label, total, reducao });
   };
 
-  // A multa de ultrapassagem some junto com o ajuste de demanda, não como passo à parte — é
-  // consequência direta de resizar a contratada + peak shaving, igual em calcularCenariosGrupoA.
-  estado = { ...estado, demandaContratadaKw: demandaPosBess, multaUltrapassagem: 0 };
+  estado = { ...estado, demandaContratadaKw: demandaPosBess };
   passo("Ajuste de demanda");
 
+  // A multa de ultrapassagem some aqui, não no ajuste de demanda acima: quem evita passar da
+  // demanda contratada é o PEAK SHAVING do BESS entrando em ação (este passo), não o valor
+  // contratado em si — a multa pode desaparecer mesmo sem editar a demanda contratada (ex.:
+  // contratada já correta, só faltava o BESS pra nunca ultrapassá-la na prática).
   const energiaCargaBess = p.energiaPontaKwh / rte;
-  estado = { ...estado, energiaPontaKwh: 0, energiaForaPontaKwh: estado.energiaForaPontaKwh + energiaCargaBess };
+  estado = { ...estado, energiaPontaKwh: 0, energiaForaPontaKwh: estado.energiaForaPontaKwh + energiaCargaBess, multaUltrapassagem: 0 };
   passo("Zerar consumo na ponta");
 
   if (corrigirReativo && estado.reativoExcedente > 0) {
