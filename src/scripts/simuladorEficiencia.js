@@ -962,7 +962,6 @@ function initBess() {
   });
   $("b-modo-aquisicao").addEventListener("change", () => {
     const eaas = $("b-modo-aquisicao").value === "eaas";
-    $("b-capex-fields").classList.toggle("hidden", eaas);
     $("b-eaas-fields").classList.toggle("hidden", !eaas);
     computeBess();
   });
@@ -1186,6 +1185,13 @@ function computeBess() {
 
   const escada = calcularEscadaReducoesGrupoA(camposComuns);
 
+  // Total exibido = sempre a soma do que está digitado nos dois campos, em qualquer modo de
+  // aquisição — diferente de cenarios.investimento, que zera o BESS em EaaS pro cálculo de
+  // payback (ali é uma questão econômica; aqui é só transparência de quanto cada parte custa).
+  const investimentoBessDigitado = Number($("b-investimento").value) || 0;
+  const investimentoSolarDigitado = $("b-usar-solar").checked ? Number($("b-solar-investimento").value) || 0 : 0;
+  $("b-investimento-total").value = brl(investimentoBessDigitado + investimentoSolarDigitado);
+
   ultimoResultadoBess = { bess, cenarios, escada, modoAquisicao };
 
   const l1 = cenarios.linhas[0];
@@ -1361,12 +1367,16 @@ async function exportarPdfBess() {
     ["Economia de energia acumulada (ano 1)", brl(cenarios.linhas[0].economiaEnergiaAnual)],
     [`Economia de energia total (${cenarios.linhas.length} anos)`, brl(cenarios.economiaEnergiaTotalHorizonte)],
   ];
-  if (cenarios.investimentoSolar > 0) {
-    if (modoAquisicao === "capex") {
-      tabelaFinanceira.push(["Investimento BESS", brl(cenarios.investimentoBess)]);
+  // Sempre mostra o investimento digitado (BESS + Solar), em qualquer modo de aquisição — por
+  // transparência, mesmo que em EaaS o BESS não conte pro payback (ver nota no card da UI).
+  const investimentoBessDigitado = Number($("b-investimento").value) || 0;
+  const investimentoSolarDigitado = $("b-usar-solar").checked ? Number($("b-solar-investimento").value) || 0 : 0;
+  if (investimentoBessDigitado > 0 || investimentoSolarDigitado > 0) {
+    tabelaFinanceira.push(["Investimento BESS", brl(investimentoBessDigitado)]);
+    if (investimentoSolarDigitado > 0) {
+      tabelaFinanceira.push(["Investimento Solar (usina própria)", brl(investimentoSolarDigitado)]);
+      tabelaFinanceira.push(["Investimento total (BESS + Solar)", brl(investimentoBessDigitado + investimentoSolarDigitado)]);
     }
-    tabelaFinanceira.push(["Investimento Solar (usina própria)", brl(cenarios.investimentoSolar)]);
-    tabelaFinanceira.push(["Investimento total (BESS + Solar)", brl(cenarios.investimento)]);
   }
   if (modoAquisicao === "capex") {
     tabelaFinanceira.push(["Tempo de retorno (payback)", cenarios.paybackMeses ? `${num(cenarios.paybackMeses, 1)} meses` : "—"]);
