@@ -190,7 +190,12 @@ document.querySelectorAll(".voltar-btn").forEach((btn) => {
 function coletarCamposPainel(painelId) {
   const painel = document.getElementById(painelId);
   const dados = {};
-  painel.querySelectorAll("input[id], select[id]").forEach((el) => {
+  // type=file fica de fora: quando um arquivo está selecionado, .value devolve um caminho
+  // fictício tipo "C:\fakepath\conta.pdf" (nunca o arquivo em si, por segurança do navegador) —
+  // não serve pra nada restaurado depois, e pior: tentar reatribuir esse valor a um input file
+  // no aplicarCamposPainel() JOGA EXCEÇÃO (só aceita string vazia), o que interrompia o loop de
+  // restauração e fazia TODO campo seguinte no DOM ficar sem ser preenchido.
+  painel.querySelectorAll("input[id]:not([type=file]), select[id]").forEach((el) => {
     dados[el.id] = el.type === "checkbox" ? el.checked : el.value;
   });
   return dados;
@@ -200,7 +205,10 @@ function aplicarCamposPainel(painelId, dados) {
   const painel = document.getElementById(painelId);
   Object.entries(dados || {}).forEach(([id, value]) => {
     const el = painel.querySelector(`#${CSS.escape(id)}`);
-    if (!el) return;
+    // Ver nota em coletarCamposPainel: nunca reatribuir type=file (lança exceção com valor não
+    // vazio) — defensivo aqui também, pra não quebrar a restauração de simulações salvas antes
+    // desse fix, que podem ter um caminho fictício gravado nesse campo.
+    if (!el || el.type === "file") return;
     if (el.type === "checkbox") el.checked = !!value;
     else el.value = value;
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -965,6 +973,12 @@ function initBess() {
     $("b-eaas-fields").classList.toggle("hidden", !eaas);
     computeBess();
   });
+  $("b-considerar-bess").addEventListener("change", () => {
+    const considerar = $("b-considerar-bess").checked;
+    $("b-investimento-bess-wrap").classList.toggle("hidden", !considerar);
+    $("b-investimento-bess-nota").classList.toggle("hidden", !considerar);
+    computeBess();
+  });
   $("b-lucro-real").addEventListener("change", () => {
     $("b-lucro-real-fields").classList.toggle("hidden", !$("b-lucro-real").checked);
     computeBess();
@@ -1139,6 +1153,7 @@ function computeBess() {
   `;
 
   const modoAquisicao = $("b-modo-aquisicao").value;
+  const considerarBess = $("b-considerar-bess").checked;
   const rte = Number($("b-rte").value) / 100 || 0.9;
   const corrigirReativo = $("b-corrigir-reativo").checked;
   // Grid Zero: o BESS prioriza guardar o excedente solar em vez de exportar pra rede, então
@@ -1165,6 +1180,7 @@ function computeBess() {
     tarifaMercadoLivre: Number($("b-tarifa-ml").value) || null,
     tarifaTusd: Number($("b-tarifa-tusd").value) || 0,
     rte,
+    considerarBess,
     corrigirReativo,
     geracaoSolarMensalKwh,
   };
@@ -1188,7 +1204,9 @@ function computeBess() {
   // Total exibido = sempre a soma do que está digitado nos dois campos, em qualquer modo de
   // aquisição — diferente de cenarios.investimento, que zera o BESS em EaaS pro cálculo de
   // payback (ali é uma questão econômica; aqui é só transparência de quanto cada parte custa).
-  const investimentoBessDigitado = Number($("b-investimento").value) || 0;
+  // Se o BESS nem está sendo considerado, o campo dele some da UI — não faz sentido somar um
+  // valor que ficou pra trás digitado num campo escondido.
+  const investimentoBessDigitado = considerarBess ? Number($("b-investimento").value) || 0 : 0;
   const investimentoSolarDigitado = $("b-usar-solar").checked ? Number($("b-solar-investimento").value) || 0 : 0;
   $("b-investimento-total").value = brl(investimentoBessDigitado + investimentoSolarDigitado);
 
@@ -1219,7 +1237,7 @@ function computeBess() {
   }
   $("b-result-cards").innerHTML = cards.join("");
 
-  renderChartConta(cenarios.linhas, cenarios.usarMercadoLivre);
+  renderChartConta(cenarios.linhas, cenarios.usarMercadoLivre, considerarBess);
   renderChartEscada(escada.passos);
 }
 
@@ -1303,10 +1321,11 @@ function renderChartEscada(passos) {
   });
 }
 
-function renderChartConta(linhas, usouMercadoLivre) {
+function renderChartConta(linhas, usouMercadoLivre, considerarBess = true) {
   const ctx = $("b-chart-conta");
+  const sufixo = `${considerarBess ? " com BESS" : " otimizada"}${usouMercadoLivre ? " + Mercado Livre" : ""}`;
   const heading = ctx.closest(".rounded-xl")?.querySelector("h2");
-  if (heading) heading.textContent = `Conta mensal — Atual vs. Com BESS${usouMercadoLivre ? " + Mercado Livre" : ""}`;
+  if (heading) heading.textContent = `Conta mensal — Atual vs.${sufixo}`;
   if (chartConta) chartConta.destroy();
   chartConta = new Chart(ctx, {
     type: "line",
@@ -1314,7 +1333,7 @@ function renderChartConta(linhas, usouMercadoLivre) {
       labels: linhas.map((l) => `Ano ${l.anoRelativo}`),
       datasets: [
         { label: "Conta atual (mercado regulado)", data: linhas.map((l) => l.contaAtual), borderColor: "#e08e0b", tension: 0.15 },
-        { label: `Conta com BESS${usouMercadoLivre ? " + Mercado Livre" : ""}`, data: linhas.map((l) => l.contaComBess), borderColor: "#1c75bc", tension: 0.15 },
+        { label: `Conta${sufixo}`, data: linhas.map((l) => l.contaComBess), borderColor: "#1c75bc", tension: 0.15 },
       ],
     },
     options: { responsive: true },
@@ -1327,6 +1346,7 @@ async function exportarPdfBess() {
   const cliente = $("b-cliente").value || "Cliente";
   const mlSufixo = cenarios.usarMercadoLivre ? " + Mercado Livre" : "";
 
+  const considerarBess = $("b-considerar-bess").checked;
   const multaUltrapassagem = Number($("b-multa-ultrapassagem").value) || 0;
   const diagnostico = [
     `Demanda contratada atual: ${num(Number($("b-demanda").value), 0)} kW, com consumo de ${num(Number($("b-energia-ponta").value), 0)} kWh/mês no horário de ponta.`,
@@ -1344,8 +1364,10 @@ async function exportarPdfBess() {
   const geracaoSolarMensalKwh = geracaoSolarBruta * (solarZeroGrid ? 1 : solarSimultaneidade);
 
   const escopo = [
-    `Instalação de banco de baterias (BESS) de ${num(bess.potenciaRecomendadaKw, 1)} kW / ${num(bess.capacidadeFinalKwh, 1)} kWh para deslocamento de carga na ponta (peak shaving)${multaUltrapassagem > 0 ? ", eliminando a multa por ultrapassagem de demanda" : ""}.`,
-    `Redução da demanda contratada de ${num(Number($("b-demanda").value), 0)} kW para ${num(Number($("b-demanda-pos").value), 0)} kW.`,
+    considerarBess
+      ? `Instalação de banco de baterias (BESS) de ${num(bess.potenciaRecomendadaKw, 1)} kW / ${num(bess.capacidadeFinalKwh, 1)} kWh para deslocamento de carga na ponta (peak shaving)${multaUltrapassagem > 0 ? ", eliminando a multa por ultrapassagem de demanda" : ""}.`
+      : null,
+    considerarBess ? `Redução da demanda contratada de ${num(Number($("b-demanda").value), 0)} kW para ${num(Number($("b-demanda-pos").value), 0)} kW.` : null,
     corrigirReativo ? "Correção do fator de potência via o próprio inversor do BESS, eliminando a cobrança de reativo excedente." : null,
     geracaoSolarBruta > 0
       ? solarZeroGrid
@@ -1362,14 +1384,15 @@ async function exportarPdfBess() {
 
   const tabelaFinanceira = [
     ["Conta atual (mensal, mercado regulado)", brl2(cenarios.linhas[0].contaAtual)],
-    [`Conta com BESS${mlSufixo} — só energia (mensal)`, brl2(cenarios.linhas[0].contaAtual - cenarios.economiaEnergiaMensalAno1)],
+    [`Conta otimizada${considerarBess ? " com BESS" : ""}${mlSufixo} — só energia (mensal)`, brl2(cenarios.linhas[0].contaAtual - cenarios.economiaEnergiaMensalAno1)],
     ["Economia de energia estimada (mensal)", brl2(cenarios.economiaEnergiaMensalAno1)],
     ["Economia de energia acumulada (ano 1)", brl(cenarios.linhas[0].economiaEnergiaAnual)],
     [`Economia de energia total (${cenarios.linhas.length} anos)`, brl(cenarios.economiaEnergiaTotalHorizonte)],
   ];
   // Sempre mostra o investimento digitado (BESS + Solar), em qualquer modo de aquisição — por
-  // transparência, mesmo que em EaaS o BESS não conte pro payback (ver nota no card da UI).
-  const investimentoBessDigitado = Number($("b-investimento").value) || 0;
+  // transparência, mesmo que em EaaS o BESS não conte pro payback (ver nota no card da UI). Se o
+  // BESS nem está sendo considerado, o campo dele já some da UI — não mostra na proposta também.
+  const investimentoBessDigitado = considerarBess ? Number($("b-investimento").value) || 0 : 0;
   const investimentoSolarDigitado = $("b-usar-solar").checked ? Number($("b-solar-investimento").value) || 0 : 0;
   if (investimentoBessDigitado > 0 || investimentoSolarDigitado > 0) {
     tabelaFinanceira.push(["Investimento BESS", brl(investimentoBessDigitado)]);
@@ -1393,13 +1416,15 @@ async function exportarPdfBess() {
   }
 
   await gerarPropostaPdf({
-    subtitulo: `Projeto de Eficiência Energética + BESS${mlSufixo}`,
+    subtitulo: `Projeto de Eficiência Energética${considerarBess ? " + BESS" : ""}${mlSufixo}`,
     codigoProposta: $("b-proposta-codigo").value || "—",
     cliente,
     responsavelNome: $("b-responsavel-nome").value,
     responsavelCargo: $("b-responsavel-cargo").value,
     email: $("b-email").value,
-    resumoExecutivo: `Esta proposta apresenta a solução de armazenamento de energia (BESS) para otimização do consumo elétrico nas instalações de ${cliente}. Nosso objetivo é reduzir os custos operacionais com energia e demanda contratada, com economia de energia estimada de ${brl2(cenarios.economiaEnergiaMensalAno1)}/mês.`,
+    resumoExecutivo: considerarBess
+      ? `Esta proposta apresenta a solução de armazenamento de energia (BESS) para otimização do consumo elétrico nas instalações de ${cliente}. Nosso objetivo é reduzir os custos operacionais com energia e demanda contratada, com economia de energia estimada de ${brl2(cenarios.economiaEnergiaMensalAno1)}/mês.`
+      : `Esta proposta apresenta uma solução de otimização do consumo elétrico nas instalações de ${cliente}, sem uso de banco de baterias (BESS). Nosso objetivo é reduzir os custos operacionais com energia, com economia estimada de ${brl2(cenarios.economiaEnergiaMensalAno1)}/mês.`,
     diagnostico,
     escopo,
     tabelaFinanceira,

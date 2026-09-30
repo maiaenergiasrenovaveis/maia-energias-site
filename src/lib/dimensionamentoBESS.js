@@ -94,7 +94,11 @@ export function calcularCenariosGrupoA(p) {
   // potência/capacidade em calcularBESS, só que aqui aplicada ao IMPACTO NA CONTA, que antes
   // não considerava essa energia extra nenhuma).
   const rte = p.rte > 0 ? p.rte : 0.9;
-  const corrigirReativo = !!p.corrigirReativo;
+  // Desliga TODO efeito atribuível ao BESS (peak shaving, ajuste de demanda, multa, e a
+  // correção de reativo — que também depende do inversor do BESS) sem desligar solar/ML, que
+  // são alavancas independentes. Serve pra simular uma proposta só de solar/Mercado Livre.
+  const considerarBess = p.considerarBess !== false;
+  const corrigirReativo = considerarBess && !!p.corrigirReativo;
   const geracaoSolarMensalKwh = p.geracaoSolarMensalKwh ?? 0;
 
   const base = {
@@ -140,7 +144,7 @@ export function calcularCenariosGrupoA(p) {
       mercadoLivre: false,
     });
 
-    const efetividade = efetividadeBessNoAno(anoRelativo);
+    const efetividade = considerarBess ? efetividadeBessNoAno(anoRelativo) : 0;
     const energiaDeslocadaPeloBess = base.energiaPontaKwh * efetividade;
     const energiaCargaBess = energiaDeslocadaPeloBess / rte;
     // Energia fora ponta com BESS = a que já era consumida + a recarga do BESS (puxada fora de
@@ -154,12 +158,13 @@ export function calcularCenariosGrupoA(p) {
       ...base,
       energiaPontaKwh: base.energiaPontaKwh - energiaDeslocadaPeloBess,
       energiaForaPontaKwh: energiaForaPontaComBess,
-      demandaContratadaKw: p.demandaContratadaKwPosBess ?? base.demandaContratadaKw,
+      demandaContratadaKw: considerarBess ? (p.demandaContratadaKwPosBess ?? base.demandaContratadaKw) : base.demandaContratadaKw,
       reativoExcedente: corrigirReativo ? 0 : base.reativoExcedente,
       // Multa de ultrapassagem some no cenário "com BESS": é o peak shaving em si que evita
       // passar da demanda contratada, não uma correção independente que precise de flag própria
-      // (o valor contratado pode até ficar igual — o que muda é nunca mais ultrapassá-lo).
-      multaUltrapassagem: 0,
+      // (o valor contratado pode até ficar igual — o que muda é nunca mais ultrapassá-lo). Só
+      // some se o BESS estiver sendo considerado — sem ele, nada evita a ultrapassagem de fato.
+      multaUltrapassagem: considerarBess ? 0 : base.multaUltrapassagem,
       tarifaPonta,
       tarifaForaPonta,
       tarifaMercadoLivre,
@@ -199,7 +204,7 @@ export function calcularCenariosGrupoA(p) {
   // A usina solar é sempre um investimento à parte (CAPEX), mesmo quando o BESS em si é
   // contratado como EaaS — por isso soma independente do modoAquisicao, diferente do
   // investimento do BESS (que só entra aqui se for CAPEX; em EaaS ele vira mensalidade).
-  const investimentoBess = p.modoAquisicao === "eaas" ? 0 : p.investimentoBess ?? 0;
+  const investimentoBess = considerarBess && p.modoAquisicao !== "eaas" ? p.investimentoBess ?? 0 : 0;
   const investimentoSolar = p.investimentoSolar ?? 0;
   const investimento = investimentoBess + investimentoSolar;
   const paybackMeses = investimento > 0 && economiaEnergiaMensalAno1 > 0 ? investimento / economiaEnergiaMensalAno1 : null;
@@ -238,6 +243,9 @@ export function calcularCenariosGrupoA(p) {
  *   energia extra puxada da rede pra recarregar a bateria (energiaPontaKwh / rte)
  * @param {boolean} [p.corrigirReativo] - se true, zera o reativo excedente a partir do passo 2
  * @param {number} [p.geracaoSolarMensalKwh] - geração solar estimada do mês, abate energiaForaPontaKwh
+ * @param {boolean} [p.considerarBess] - default true; se false, remove os passos "Ajuste de
+ *   demanda" e "Zerar consumo na ponta" (e desativa corrigirReativo) — simula uma proposta sem
+ *   BESS, só com as alavancas independentes (solar/ML) que estiverem ativas
  */
 export function calcularEscadaReducoesGrupoA(p) {
   const baseFixo = {
@@ -248,7 +256,8 @@ export function calcularEscadaReducoesGrupoA(p) {
   const usarMercadoLivre = !!(p.usarMercadoLivre && p.tarifaMercadoLivre != null);
   const demandaPosBess = p.demandaContratadaKwPosBess ?? p.demandaContratadaKw;
   const rte = p.rte > 0 ? p.rte : 0.9;
-  const corrigirReativo = !!p.corrigirReativo;
+  const considerarBess = p.considerarBess !== false;
+  const corrigirReativo = considerarBess && !!p.corrigirReativo;
   const geracaoSolarMensalKwh = p.geracaoSolarMensalKwh ?? 0;
 
   let estado = {
@@ -279,16 +288,21 @@ export function calcularEscadaReducoesGrupoA(p) {
     passos.push({ label, total, reducao });
   };
 
-  estado = { ...estado, demandaContratadaKw: demandaPosBess };
-  passo("Ajuste de demanda");
+  // Ajuste de demanda e zerar-ponta são efeitos do BESS (peak shaving) — sem ele, nem a demanda
+  // pós-BESS nem a multa de ultrapassagem fazem sentido de aplicar, então esses dois passos
+  // simplesmente não entram na escadinha (fica só solar/reativo/ML, o que estiver ativo).
+  if (considerarBess) {
+    estado = { ...estado, demandaContratadaKw: demandaPosBess };
+    passo("Ajuste de demanda");
 
-  // A multa de ultrapassagem some aqui, não no ajuste de demanda acima: quem evita passar da
-  // demanda contratada é o PEAK SHAVING do BESS entrando em ação (este passo), não o valor
-  // contratado em si — a multa pode desaparecer mesmo sem editar a demanda contratada (ex.:
-  // contratada já correta, só faltava o BESS pra nunca ultrapassá-la na prática).
-  const energiaCargaBess = p.energiaPontaKwh / rte;
-  estado = { ...estado, energiaPontaKwh: 0, energiaForaPontaKwh: estado.energiaForaPontaKwh + energiaCargaBess, multaUltrapassagem: 0 };
-  passo("Zerar consumo na ponta");
+    // A multa de ultrapassagem some aqui, não no ajuste de demanda acima: quem evita passar da
+    // demanda contratada é o PEAK SHAVING do BESS entrando em ação (este passo), não o valor
+    // contratado em si — a multa pode desaparecer mesmo sem editar a demanda contratada (ex.:
+    // contratada já correta, só faltava o BESS pra nunca ultrapassá-la na prática).
+    const energiaCargaBess = p.energiaPontaKwh / rte;
+    estado = { ...estado, energiaPontaKwh: 0, energiaForaPontaKwh: estado.energiaForaPontaKwh + energiaCargaBess, multaUltrapassagem: 0 };
+    passo("Zerar consumo na ponta");
+  }
 
   if (corrigirReativo && estado.reativoExcedente > 0) {
     estado = { ...estado, reativoExcedente: 0 };
