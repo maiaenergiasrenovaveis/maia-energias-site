@@ -430,6 +430,18 @@ function initSolar() {
     }
   }
 
+  // Precisa ser registrado ANTES do listener genérico abaixo (mesmo motivo do ligarSomaTusdTe
+  // no BESS/Migração): se a potência escolhida fosse recalculada DEPOIS do computeSolar() já ter
+  // rodado neste mesmo evento, a tela ficaria um clique atrasada.
+  const atualizarPotenciaPorQuantidade = () => {
+    const qtd = Number($("s-modulo-qtd").value) || 0;
+    if (qtd <= 0) return; // campo vazio/zero: não mexe na potência escolhida, comportamento normal
+    const moduloWp = Number($("s-modulo-wp").value) || 0;
+    $("s-potencia-escolhida").value = ((moduloWp * qtd) / 1000).toFixed(2);
+  };
+  $("s-modulo-wp").addEventListener("input", atualizarPotenciaPorQuantidade);
+  $("s-modulo-qtd").addEventListener("input", atualizarPotenciaPorQuantidade);
+
   document.querySelectorAll("#painel-solar input, #painel-solar select").forEach((el) => {
     el.addEventListener("input", computeSolar);
   });
@@ -876,11 +888,15 @@ async function exportarPdfSolar() {
     `Taxa de disponibilidade (conta mínima): ${num(dim.taxaDisp, 0)} kWh/mês, cobrados independente da geração.`,
   ];
 
+  const moduloWp = Number($("s-modulo-wp").value) || 0;
+  const inversorKw = Number($("s-inversor-kw").value) || 0;
+  const inversorQtd = Number($("s-inversor-qtd").value) || 0;
   const areaEscolhida = tipoInstalacao === "solo" ? area.areaNecessariaSolo : area.areaNecessariaTelhado;
   const escopo = [
     `Instalação de sistema fotovoltaico de ${num(dim.potenciaEscolhidaKwp, 2)} kWp, projetado para a irradiação solar local (${num(dim.irradiacaoMedia, 2)} kWh/m².dia em média).`,
     `Geração média estimada de ${num(dim.geracaoMedia, 0)} kWh/mês, cobrindo ${pct(dim.autonomiaPercent)} do consumo (autonomia do sistema).`,
-    `${area.numeroModulos} módulos, ocupando ${num(areaEscolhida, 0)} m² de área (instalação em ${tipoInstalacao}).`,
+    `${area.numeroModulos} módulos${moduloWp > 0 ? ` de ${num(moduloWp, 0)} Wp` : ""}, ocupando ${num(areaEscolhida, 0)} m² de área (instalação em ${tipoInstalacao}).`,
+    inversorQtd > 0 ? `${inversorQtd} inversor${inversorQtd > 1 ? "es" : ""}${inversorKw > 0 ? ` de ${num(inversorKw, 1)} kW` : ""}.` : null,
     limitadoPorArea
       ? `Potência limitada pela área real disponível no local: o ideal seria ${num(potenciaDesejadaKwp, 2)} kWp, mas o espaço comporta ${num(dim.potenciaEscolhidaKwp, 2)} kWp — todos os valores desta proposta já refletem essa potência real.`
       : null,
