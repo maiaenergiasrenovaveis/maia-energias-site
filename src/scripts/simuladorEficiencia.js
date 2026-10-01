@@ -1006,6 +1006,21 @@ function initBess() {
   ligarSomaTusdTe("b-tarifa-ponta-tusd", "b-tarifa-ponta-te", "b-tarifa-ponta");
   ligarSomaTusdTe("b-tarifa-fora-ponta-tusd", "b-tarifa-fora-ponta-te", "b-tarifa-fora-ponta");
 
+  // Mesma lógica/ordem de registro do ligarSomaTusdTe acima, mas aqui a conta é
+  // potência (Wp × quantidade) × geração específica (kWh/kWp/mês), não uma soma direta — por
+  // isso não reaproveita ligarSomaTusdTe, que só soma dois campos.
+  const atualizarGeracaoSolarPorQuantidade = () => {
+    const qtd = Number($("b-solar-modulo-qtd").value) || 0;
+    if (qtd <= 0) return; // campo vazio/zero: não mexe na geração estimada, comportamento normal
+    const moduloWp = Number($("b-solar-modulo-wp").value) || 0;
+    const geracaoEspecifica = Number($("b-solar-geracao-especifica").value) || 0;
+    const potenciaKwp = (moduloWp * qtd) / 1000;
+    $("b-solar-geracao").value = Math.round(potenciaKwp * geracaoEspecifica);
+  };
+  ["b-solar-modulo-wp", "b-solar-modulo-qtd", "b-solar-geracao-especifica"].forEach((id) => {
+    $(id).addEventListener("input", atualizarGeracaoSolarPorQuantidade);
+  });
+
   document.querySelectorAll("#painel-bess input, #painel-bess select").forEach((el) => {
     el.addEventListener("input", computeBess);
   });
@@ -1378,6 +1393,10 @@ async function exportarPdfBess() {
   const solarZeroGrid = $("b-solar-modo").value !== "simultaneidade";
   const solarSimultaneidade = Number($("b-solar-simultaneidade").value) / 100 || 0.6;
   const geracaoSolarMensalKwh = geracaoSolarBruta * (solarZeroGrid ? 1 : solarSimultaneidade);
+  const solarModuloWp = Number($("b-solar-modulo-wp").value) || 0;
+  const solarModuloQtd = Number($("b-solar-modulo-qtd").value) || 0;
+  const solarInversorKw = Number($("b-solar-inversor-kw").value) || 0;
+  const solarInversorQtd = Number($("b-solar-inversor-qtd").value) || 0;
 
   const escopo = [
     considerarBess
@@ -1390,6 +1409,8 @@ async function exportarPdfBess() {
         ? `Geração solar própria estimada em ${num(geracaoSolarBruta, 0)} kWh/mês, em modo Grid Zero — o BESS armazena o excedente em vez de exportar, aproveitando praticamente toda a geração.`
         : `Geração solar própria estimada em ${num(geracaoSolarBruta, 0)} kWh/mês, com ${num(solarSimultaneidade * 100, 0)}% de simultaneidade (uso instantâneo); o restante é exportado como crédito de compensação para uso futuro.`
       : null,
+    solarModuloQtd > 0 ? `Usina solar com ${solarModuloQtd} módulos${solarModuloWp > 0 ? ` de ${num(solarModuloWp, 0)} Wp` : ""}.` : null,
+    solarInversorQtd > 0 ? `${solarInversorQtd} inversor${solarInversorQtd > 1 ? "es" : ""}${solarInversorKw > 0 ? ` de ${num(solarInversorKw, 1)} kW` : ""}.` : null,
     cenarios.usarMercadoLivre
       ? `Migração para o Mercado Livre de Energia, com energia estimada em R$ ${num(Number($("b-tarifa-ml").value), 4)}/kWh + TUSD de R$ ${num(Number($("b-tarifa-tusd").value), 4)}/kWh (continua devido à distribuidora local).`
       : null,

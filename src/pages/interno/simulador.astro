@@ -325,6 +325,19 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
               <label class="block text-[11px] font-semibold text-slate-500 mb-1">Geração solar estimada (kWh/mês)</label>
               <input id="b-solar-geracao" type="number" step="1" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
               <p class="text-[10px] text-slate-400 mt-1">Estimativa simples (não dimensiona a usina aqui). Para dimensionar em detalhe, use o módulo Solar e traga a geração média mensal.</p>
+              <div class="grid grid-cols-2 gap-2 text-sm mt-2">
+                <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Potência do módulo (Wp)</label><input id="b-solar-modulo-wp" type="number" value="650" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+                <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Quantidade de módulos</label><input id="b-solar-modulo-qtd" type="number" min="0" step="1" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" placeholder="Opcional" /></div>
+              </div>
+              <div class="mt-2">
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">Geração específica (kWh/kWp/mês)</label>
+                <input id="b-solar-geracao-especifica" type="number" step="1" value="120" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+                <p class="text-[10px] text-slate-400 mt-1">Preenchendo a quantidade de módulos, a geração estimada acima é recalculada automaticamente (Wp × quantidade × geração específica, convertida pra kWh/mês) — continua editável direto também. 120 kWh/kWp/mês é uma média nacional aproximada; ajuste pra região/orientação real se souber.</p>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-sm mt-2">
+                <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Potência do inversor (kW)</label><input id="b-solar-inversor-kw" type="number" step="0.1" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+                <div><label class="block text-[11px] font-semibold text-slate-500 mb-1">Quantidade de inversores</label><input id="b-solar-inversor-qtd" type="number" min="0" step="1" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+              </div>
               <div class="mt-2">
                 <label class="block text-[11px] font-semibold text-slate-500 mb-1">Modo de uso do excedente</label>
                 <select id="b-solar-modo" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
