@@ -140,6 +140,25 @@ async function syncStationsAndSnapshots(env) {
   await runBatches(env.DB, snapshotStmts);
   await runBatches(env.DB, rollupStmts);
 
+  // Remove estações que a Tupi tirou do mapa (ou moveu pra fora de SP) — o upsert acima
+  // só adiciona/atualiza, então sem isso elas ficariam pra sempre na contagem e no mapa,
+  // congeladas. Trava de segurança: se a lista vier curta demais (falha da Tupi), não apaga nada.
+  if (sp.length >= 500) {
+    const liveIds = new Set(sp.map((s) => s._id));
+    const known = await env.DB.prepare(`SELECT station_id FROM stations WHERE source = 'tupi' OR source IS NULL`).all();
+    const gone = known.results.map((r) => r.station_id).filter((id) => !liveIds.has(id));
+    if (gone.length > 0 && gone.length <= known.results.length * 0.2) {
+      const delStmts = [];
+      for (const id of gone) {
+        delStmts.push(env.DB.prepare(`DELETE FROM stations WHERE station_id = ?`).bind(id));
+        delStmts.push(env.DB.prepare(`DELETE FROM connector_meta WHERE station_id = ?`).bind(id));
+        delStmts.push(env.DB.prepare(`DELETE FROM station_pricing WHERE station_id = ?`).bind(id));
+        delStmts.push(env.DB.prepare(`DELETE FROM connector_daily_stats WHERE station_id = ?`).bind(id));
+      }
+      await runBatches(env.DB, delStmts);
+    }
+  }
+
   // Prune snapshots older than 30 days to keep the table bounded
   await env.DB.prepare(`DELETE FROM status_snapshots WHERE captured_at < ?`).bind(now - 30 * 24 * 3600 * 1000).run();
 
