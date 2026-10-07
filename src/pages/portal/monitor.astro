@@ -203,7 +203,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         <p><strong>"Sem dado":</strong> nem toda estação listada no mapa da Tupi tem telemetria de conector — cerca de 70% delas aparecem só como ponto no mapa (provavelmente cadastros não conectados ao monitoramento ao vivo deles), sem status/preço/receita possíveis de calcular. A lista de estações prioriza mostrar primeiro as que têm telemetria real.</p>
         <p><strong>Status:</strong> refletem o último estado sincronizado de cada conector (protocolo OCPP): Available, Charging, Preparing, Finishing, Reserved = operacional (sem falha); Faulted, Unavailable, SuspendedEV = com problema.</p>
         <p><strong>Operacional ≠ em uso:</strong> "operacional" inclui tanto Available (disponível, ocioso, sem ninguém carregando) quanto Charging (carregando de verdade). "Em uso" conta só o estado Charging — um posto pode estar 100% operacional (sem nenhuma falha) e 0% em uso.</p>
-        <p><strong>Atualização de status:</strong> um job agendado (a cada 5 min) salva um retrato do status de cada conector em um banco próprio, para calcular disponibilidade e uso ao longo do tempo (não só o instante atual). O histórico começou a ser coletado em 30/07/2026 — janelas maiores (7d, 15d, 30d) vão ficando mais precisas com o tempo.</p>
+        <p><strong>Atualização de status:</strong> um job agendado (a cada 5 min) lê o status de cada conector e grava em um banco próprio apenas quando ele muda (carregando, disponível ou com problema), para calcular disponibilidade e uso ao longo do tempo (não só o instante atual). O histórico começou a ser coletado em 30/07/2026. Períodos em que a coleta ficou parada não entram nas porcentagens (o tempo é descontado), então janelas com muitas falhas de coleta têm menos dados — o texto no topo mostra a hora do último status coletado.</p>
         <p><strong>Preço e receita estimada:</strong> o preço por kWh vem do endpoint de detalhe de cada posto, coletado aos poucos (~20 postos a cada 5 min, cobertura completa em algumas horas) para não sobrecarregar o servidor da Tupi. Receita estimada = horas em uso (Charging) na janela × <strong>40 kWh por hora de uso</strong> (consumo médio realista de recarga — nenhum carro sustenta a potência nominal do carregador por uma hora inteira, a curva de carga cai bastante depois de ~80% de bateria) × preço (R$/kWh). Não usamos a potência nominal cadastrada na fórmula, propositalmente. É uma <strong>estimativa</strong>, não faturamento real auditado (não há dado de sessões/kWh efetivamente vendido nesta fonte).</p>
         <p><strong>Acesso restrito:</strong> a própria Tupi marca algumas estações como privadas (hotéis, resorts, clubes, concessionárias, vagas individuais de condomínio/empresa) — cerca de 10% da base em SP. Mantemos essas estações no Monitor, sinalizadas com o selo "Acesso restrito", mas você pode ocultá-las com o filtro acima do mapa se quiser ver só infraestrutura de acesso público.</p>
         <p><strong>Potência com ⚠️:</strong> alguns postos têm potência cadastrada claramente errada na própria Tupi (ex.: vários postos diferentes com exatamente "480kW" em todos os conectores — um valor de placeholder/bug do cadastro deles, não uma leitura real). Sinalizamos com ⚠️ e excluímos esses valores dos totais e do gráfico de potência.</p>
@@ -688,7 +688,11 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         const data = await res.json();
         allStations = data.stations;
         allRegions = data.regions || [];
-        document.getElementById("last-updated").textContent = "Atualizado " + new Date(data.updatedAt).toLocaleString("pt-BR");
+        const asOf = data.dataAsOf ? new Date(data.dataAsOf) : null;
+        const staleMin = asOf ? Math.round((Date.now() - asOf.getTime()) / 60000) : null;
+        document.getElementById("last-updated").textContent = asOf
+          ? "Status de " + asOf.toLocaleString("pt-BR") + (staleMin > 20 ? " — coleta atrasada, status pode estar desatualizado" : "")
+          : "Sem coleta de status ainda";
         document.getElementById("price-coverage").textContent = `${(data.priceCoverage || 0).toLocaleString("pt-BR")} de ${data.count.toLocaleString("pt-BR")} postos`;
         const ABVE_SP_TOTAL = 7864;
         document.getElementById("market-coverage").textContent =

@@ -1,3 +1,5 @@
+import { DAY_MS, classOf, dayBucket, dailySlices, segmentsFor, integrate, timelinePoints } from "./worker-intervals.js";
+
 const SP_BOUNDS = { latMin: -25.36, latMax: -19.78, lngMin: -53.11, lngMax: -44.16 };
 const TUPI_STATIONS_URL = "https://api.tupinambaenergia.com.br/stationsShortVersion?plugTypes=&fast=false&searchText=";
 const TUPI_STATION_DETAIL_URL = (id) => `https://api.tupinambaenergia.com.br/station/${id}`;
@@ -36,30 +38,9 @@ const MAX_PLAUSIBLE_POWER_KW = 400;
 // igual à metodologia do Zeus Eletrik (referência usada para este portal).
 const ENERGY_PER_HOUR_KWH = 40;
 
-// Janelas 15d/30d/acumulado usam o agregado diário (connector_daily_stats) em vez de
-// somar status_snapshots bruto — reprocessar meses de leitura a cada carregamento de
-// página não escala (chegou a levar ~20s com o histórico atual). 24h/7d continuam lendo
-// direto do bruto, que é pequeno o bastante pra não precisar da tabela agregada.
+// Janelas 15d/30d/acumulado usam o agregado diário (connector_daily_stats); 24h/7d
+// integram direto os eventos de mudança de status (connector_events), que são poucos.
 const RAW_SCAN_WINDOWS = new Set(["24h", "7d"]);
-const DAY_MS = 24 * 3600 * 1000;
-function dayBucket(ms) {
-  return Math.floor(ms / DAY_MS) * DAY_MS;
-}
-
-// Upsert incremental do agregado diário — chamado uma vez por conector a cada tick,
-// junto com o INSERT em status_snapshots, pra manter connector_daily_stats sempre
-// em dia sem precisar reprocessar nada depois.
-function rollupStmt(env, stationId, connectorIndex, state, capturedAt) {
-  const ok = OPERATIONAL_STATES.has(state) ? 1 : 0;
-  const charging = state === "Charging" ? 1 : 0;
-  return env.DB.prepare(
-    `INSERT INTO connector_daily_stats (station_id, connector_index, day, samples, ok_samples, charging_samples) VALUES (?, ?, ?, 1, ?, ?)
-     ON CONFLICT(station_id, connector_index, day) DO UPDATE SET
-       samples = samples + 1,
-       ok_samples = ok_samples + excluded.ok_samples,
-       charging_samples = charging_samples + excluded.charging_samples`
-  ).bind(stationId, connectorIndex, dayBucket(capturedAt), ok, charging);
-}
 
 function chunk(arr, size) {
   const out = [];
@@ -86,7 +67,182 @@ function regionFor(lat, lng) {
   return best;
 }
 
-async function syncStationsAndSnapshots(env) {
+// ---------------------------------------------------------------------------------
+// Coleta (cron de 5 em 5 min)
+//
+// O plano gratuito do D1 só aceita ~100 mil gravações/dia. Por isso:
+//  - estações/conectores só são regravados quando algo muda (hash + diff);
+//  - o status NÃO é gravado a cada tick: só quando a classe do conector muda
+//    (carregando / operacional / problema) — ver recordStates e worker-intervals.js.
+// ---------------------------------------------------------------------------------
+
+const GAP_THRESHOLD_MS = 20 * 60 * 1000;
+const GAP_RETENTION_MS = 35 * DAY_MS;
+const EVENT_RETENTION_MS = 31 * DAY_MS;
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function setSyncStateStmt(env, key, value) {
+  return env.DB.prepare(`INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).bind(key, String(value));
+}
+
+// Estado do sync (último tick, períodos sem coleta, hashes). Tabela minúscula.
+async function loadSyncMeta(env) {
+  const res = await env.DB.prepare(`SELECT key, value FROM sync_state`).all();
+  const state = {};
+  for (const r of res.results) state[r.key] = r.value;
+  let gaps = [];
+  try {
+    gaps = JSON.parse(state.gaps || "[]");
+  } catch {
+    gaps = [];
+  }
+  return {
+    state,
+    gaps,
+    lastTick: state.last_tick ? Number(state.last_tick) : null,
+    trackingStart: state.tracking_start ? Number(state.tracking_start) : null,
+  };
+}
+
+function sameNum(a, b) {
+  return (a ?? null) === (b ?? null);
+}
+
+// Sincroniza estações + metadados de conectores de UMA fonte, gravando só o que mudou.
+// Se nada mudou desde a última vez (mesmo hash), não lê nem grava nada.
+async function syncCatalog(env, state, opts) {
+  const { hashKey, source, sourceSql, stations, metas, extraStmts = [], extraKey = "", deleteGone = false, hashOverride } = opts;
+  const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : (a.idx ?? 0) - (b.idx ?? 0));
+  const sortedStations = [...stations].sort(byId);
+  const sortedMetas = [...metas].sort(byId);
+  const hash = hashOverride ?? (await sha256Hex(JSON.stringify([sortedStations, sortedMetas, extraKey])));
+  if (state[hashKey] === hash) return false;
+
+  const [exStations, exMetas] = await Promise.all([
+    env.DB.prepare(`SELECT station_id, name, network, lat, lng, private, source FROM stations WHERE ${sourceSql}`).all(),
+    env.DB.prepare(`SELECT station_id, connector_index, power, current FROM connector_meta`).all(),
+  ]);
+  const exStationMap = new Map(exStations.results.map((r) => [r.station_id, r]));
+  const exMetaMap = new Map(exMetas.results.map((r) => [r.station_id + ":" + r.connector_index, r]));
+
+  const stmts = [];
+  for (const s of stations) {
+    const ex = exStationMap.get(s.id);
+    const changed =
+      !ex ||
+      ex.name !== s.name ||
+      ex.network !== s.network ||
+      ex.lat !== s.lat ||
+      ex.lng !== s.lng ||
+      (ex.private ? 1 : 0) !== (s.priv ? 1 : 0) ||
+      ex.source !== source;
+    if (changed) {
+      stmts.push(
+        env.DB.prepare(
+          `INSERT INTO stations (station_id, name, network, lat, lng, private, source) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(station_id) DO UPDATE SET name=excluded.name, network=excluded.network, lat=excluded.lat, lng=excluded.lng, private=excluded.private, source=excluded.source`
+        ).bind(s.id, s.name, s.network, s.lat, s.lng, s.priv ? 1 : 0, source)
+      );
+    }
+  }
+  for (const m of metas) {
+    const ex = exMetaMap.get(m.id + ":" + m.idx);
+    if (!ex || !sameNum(ex.power, m.power) || (ex.current ?? null) !== (m.current ?? null)) {
+      stmts.push(
+        env.DB.prepare(
+          `INSERT INTO connector_meta (station_id, connector_index, power, current) VALUES (?, ?, ?, ?)
+           ON CONFLICT(station_id, connector_index) DO UPDATE SET power=excluded.power, current=excluded.current`
+        ).bind(m.id, m.idx, m.power ?? null, m.current ?? null)
+      );
+    }
+  }
+
+  // Remove estações que a fonte tirou do mapa (ou moveu pra fora de SP) — senão ficariam
+  // pra sempre na contagem e no mapa, congeladas. Trava: se a remoção passar de 20% da
+  // base dessa fonte, assume que a lista veio incompleta e não apaga nada.
+  if (deleteGone) {
+    const liveIds = new Set(stations.map((s) => s.id));
+    const gone = exStations.results.map((r) => r.station_id).filter((id) => !liveIds.has(id));
+    if (gone.length > 0 && gone.length <= exStations.results.length * 0.2) {
+      for (const id of gone) {
+        for (const table of ["stations", "connector_meta", "station_pricing", "connector_daily_stats", "connector_state", "connector_events"]) {
+          stmts.push(env.DB.prepare(`DELETE FROM ${table} WHERE station_id = ?`).bind(id));
+        }
+      }
+    }
+  }
+
+  stmts.push(...extraStmts);
+  stmts.push(setSyncStateStmt(env, hashKey, hash));
+  await runBatches(env.DB, stmts);
+  return true;
+}
+
+function dailyUpsertStmt(env, stationId, connectorIndex, slice) {
+  return env.DB.prepare(
+    `INSERT INTO connector_daily_stats (station_id, connector_index, day, samples, ok_samples, charging_samples) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(station_id, connector_index, day) DO UPDATE SET
+       samples = samples + excluded.samples,
+       ok_samples = ok_samples + excluded.ok_samples,
+       charging_samples = charging_samples + excluded.charging_samples`
+  ).bind(stationId, connectorIndex, slice.day, slice.total, slice.ok, slice.charging);
+}
+
+// Registra o status atual de cada conector gravando SÓ o que mudou:
+//  - estado exato mudou (ex.: Available -> Preparing): atualiza connector_state;
+//  - classe mudou (carregando/operacional/problema): fecha o intervalo anterior no
+//    agregado diário, grava um evento e reinicia o intervalo;
+//  - conector novo: grava o primeiro registro.
+// Períodos em que o cron ficou fora do ar viram "gaps" e não contam como observados.
+async function recordStates(env, obs, now, meta) {
+  const stmts = [];
+  let gaps = meta.gaps;
+  if (meta.lastTick && now - meta.lastTick > GAP_THRESHOLD_MS) {
+    gaps = [...gaps, [meta.lastTick, now]].filter(([, end]) => end > now - GAP_RETENTION_MS);
+    stmts.push(setSyncStateStmt(env, "gaps", JSON.stringify(gaps)));
+  }
+
+  const rowsRes = await env.DB.prepare(`SELECT station_id, connector_index, state, cls, since FROM connector_state`).all();
+  const rows = new Map(rowsRes.results.map((r) => [r.station_id + ":" + r.connector_index, r]));
+  if (!meta.trackingStart && rowsRes.results.length === 0) stmts.push(setSyncStateStmt(env, "tracking_start", now));
+
+  for (const o of obs) {
+    const cls = classOf(o.state);
+    const row = rows.get(o.sid + ":" + o.idx);
+    if (!row) {
+      stmts.push(
+        env.DB.prepare(`INSERT INTO connector_state (station_id, connector_index, state, cls, since) VALUES (?, ?, ?, ?, ?)`).bind(o.sid, o.idx, o.state, cls, now)
+      );
+      stmts.push(
+        env.DB.prepare(`INSERT INTO connector_events (station_id, connector_index, cls, prev_cls, at) VALUES (?, ?, ?, NULL, ?)`).bind(o.sid, o.idx, cls, now)
+      );
+    } else if (row.cls !== cls) {
+      stmts.push(
+        env.DB.prepare(`UPDATE connector_state SET state = ?, cls = ?, since = ? WHERE station_id = ? AND connector_index = ?`).bind(o.state, cls, now, o.sid, o.idx)
+      );
+      stmts.push(
+        env.DB.prepare(`INSERT INTO connector_events (station_id, connector_index, cls, prev_cls, at) VALUES (?, ?, ?, ?, ?)`).bind(o.sid, o.idx, cls, row.cls, now)
+      );
+      for (const slice of dailySlices(row.cls, row.since, now, gaps)) stmts.push(dailyUpsertStmt(env, o.sid, o.idx, slice));
+    } else if (row.state !== o.state) {
+      stmts.push(env.DB.prepare(`UPDATE connector_state SET state = ? WHERE station_id = ? AND connector_index = ?`).bind(o.state, o.sid, o.idx));
+    }
+  }
+
+  stmts.push(setSyncStateStmt(env, "last_tick", now));
+  const today = dayBucket(now);
+  if (Number(meta.state.last_prune_day || 0) < today) {
+    stmts.push(env.DB.prepare(`DELETE FROM connector_events WHERE at < ?`).bind(now - EVENT_RETENTION_MS));
+    stmts.push(setSyncStateStmt(env, "last_prune_day", today));
+  }
+  await runBatches(env.DB, stmts);
+}
+
+async function syncStationsAndSnapshots(env, state) {
   const res = await fetch(TUPI_STATIONS_URL, { headers: FETCH_HEADERS });
   if (!res.ok) throw new Error("tupi_list_unavailable_" + res.status);
   const all = await res.json();
@@ -101,68 +257,26 @@ async function syncStationsAndSnapshots(env) {
       s._id
   );
 
-  const now = Date.now();
-  const stationStmts = [];
-  const connectorStmts = [];
-  const snapshotStmts = [];
-  const rollupStmts = [];
-
+  const stations = [];
+  const metas = [];
+  const obs = [];
   for (const s of sp) {
-    stationStmts.push(
-      env.DB.prepare(
-        `INSERT INTO stations (station_id, name, network, lat, lng, private) VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(station_id) DO UPDATE SET name=excluded.name, network=excluded.network, lat=excluded.lat, lng=excluded.lng, private=excluded.private`
-      ).bind(s._id, s.name || "", s.iconPack || "outra", s.lat, s.lng, s.private ? 1 : 0)
-    );
-    const connectors = s.connectedPlugs || [];
-    connectors.forEach((c, idx) => {
-      connectorStmts.push(
-        env.DB.prepare(
-          `INSERT INTO connector_meta (station_id, connector_index, power, current) VALUES (?, ?, ?, ?)
-           ON CONFLICT(station_id, connector_index) DO UPDATE SET power=excluded.power, current=excluded.current`
-        ).bind(s._id, idx, c.power ?? null, c.current ?? null)
-      );
-      const state = c.stateName || "Desconhecido";
-      snapshotStmts.push(
-        env.DB.prepare(`INSERT INTO status_snapshots (station_id, connector_index, state, captured_at) VALUES (?, ?, ?, ?)`).bind(
-          s._id,
-          idx,
-          state,
-          now
-        )
-      );
-      rollupStmts.push(rollupStmt(env, s._id, idx, state, now));
+    stations.push({ id: s._id, name: s.name || "", network: s.iconPack || "outra", lat: s.lat, lng: s.lng, priv: s.private ? 1 : 0 });
+    (s.connectedPlugs || []).forEach((c, idx) => {
+      metas.push({ id: s._id, idx, power: c.power ?? null, current: c.current ?? null });
+      obs.push({ sid: s._id, idx, state: c.stateName || "Desconhecido" });
     });
   }
 
-  await runBatches(env.DB, stationStmts);
-  await runBatches(env.DB, connectorStmts);
-  await runBatches(env.DB, snapshotStmts);
-  await runBatches(env.DB, rollupStmts);
-
-  // Remove estações que a Tupi tirou do mapa (ou moveu pra fora de SP) — o upsert acima
-  // só adiciona/atualiza, então sem isso elas ficariam pra sempre na contagem e no mapa,
-  // congeladas. Trava de segurança: se a lista vier curta demais (falha da Tupi), não apaga nada.
-  if (sp.length >= 500) {
-    const liveIds = new Set(sp.map((s) => s._id));
-    const known = await env.DB.prepare(`SELECT station_id FROM stations WHERE source = 'tupi' OR source IS NULL`).all();
-    const gone = known.results.map((r) => r.station_id).filter((id) => !liveIds.has(id));
-    if (gone.length > 0 && gone.length <= known.results.length * 0.2) {
-      const delStmts = [];
-      for (const id of gone) {
-        delStmts.push(env.DB.prepare(`DELETE FROM stations WHERE station_id = ?`).bind(id));
-        delStmts.push(env.DB.prepare(`DELETE FROM connector_meta WHERE station_id = ?`).bind(id));
-        delStmts.push(env.DB.prepare(`DELETE FROM station_pricing WHERE station_id = ?`).bind(id));
-        delStmts.push(env.DB.prepare(`DELETE FROM connector_daily_stats WHERE station_id = ?`).bind(id));
-      }
-      await runBatches(env.DB, delStmts);
-    }
-  }
-
-  // Prune snapshots older than 30 days to keep the table bounded
-  await env.DB.prepare(`DELETE FROM status_snapshots WHERE captured_at < ?`).bind(now - 30 * 24 * 3600 * 1000).run();
-
-  return sp.map((s) => s._id);
+  await syncCatalog(env, state, {
+    hashKey: "hash_tupi",
+    source: "tupi",
+    sourceSql: "(source = 'tupi' OR source IS NULL)",
+    stations,
+    metas,
+    deleteGone: sp.length >= 500,
+  });
+  return { ids: sp.map((s) => s._id), obs };
 }
 
 async function syncPricingBatch(env, spStationIds) {
@@ -192,33 +306,34 @@ async function syncPricingBatch(env, spStationIds) {
     })
   );
 
+  const existing = await env.DB.prepare(
+    `SELECT station_id, price_per_kwh, idle_fee_enabled, idle_fee_value, currency FROM station_pricing WHERE station_id IN (${batchIds.map(() => "?").join(",")})`
+  )
+    .bind(...batchIds)
+    .all();
+  const exMap = new Map(existing.results.map((r) => [r.station_id, r]));
+
   const now = Date.now();
   const stmts = [];
   for (const r of results) {
     if (!r) continue;
     const pc = r.detail.paymentCharge || {};
     const idle = r.detail.idleFee || {};
+    const price = pc.enabled && pc.method === "kWh" ? (pc.value || 0) / 100 : null;
+    const idleEnabled = idle.enabled ? 1 : 0;
+    const idleValue = idle.enabled ? (idle.value || 0) / 100 : null;
+    const currency = r.detail.currency || "BRL";
+    const ex = exMap.get(r.id);
+    if (ex && sameNum(ex.price_per_kwh, price) && ex.idle_fee_enabled === idleEnabled && sameNum(ex.idle_fee_value, idleValue) && ex.currency === currency) continue;
     stmts.push(
       env.DB.prepare(
         `INSERT INTO station_pricing (station_id, price_per_kwh, idle_fee_enabled, idle_fee_value, currency, updated_at) VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(station_id) DO UPDATE SET price_per_kwh=excluded.price_per_kwh, idle_fee_enabled=excluded.idle_fee_enabled, idle_fee_value=excluded.idle_fee_value, currency=excluded.currency, updated_at=excluded.updated_at`
-      ).bind(
-        r.id,
-        pc.enabled && pc.method === "kWh" ? (pc.value || 0) / 100 : null,
-        idle.enabled ? 1 : 0,
-        idle.enabled ? (idle.value || 0) / 100 : null,
-        r.detail.currency || "BRL",
-        now
-      )
+      ).bind(r.id, price, idleEnabled, idleValue, currency, now)
     );
   }
+  if (batchIds.length) stmts.push(setSyncStateStmt(env, "price_cursor", batchIds[batchIds.length - 1]));
   await runBatches(env.DB, stmts);
-
-  if (batchIds.length) {
-    await env.DB.prepare(
-      `INSERT INTO sync_state (key, value) VALUES ('price_cursor', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`
-    ).bind(batchIds[batchIds.length - 1]).run();
-  }
 }
 
 function parseBRNumber(str) {
@@ -239,12 +354,12 @@ function normalizeCcStatus(raw) {
 // ClubeCharger: só os postos "linked" (vinculados à plataforma deles, com status ao
 // vivo) — os "community" (cadastro aberto por qualquer um) não têm telemetria real,
 // então ficam de fora. Diferente da Tupi, o preço já vem no mesmo payload da lista.
-async function syncClubeCharger(env) {
+async function syncClubeCharger(env, state) {
   const res = await fetch(CLUBECHARGER_STATIONS_URL, { headers: FETCH_HEADERS });
-  if (!res.ok) return;
+  if (!res.ok) return [];
   const data = await res.json();
-  const stations = (data.map_payload && data.map_payload.stations) || [];
-  const sp = stations.filter(
+  const list = (data.map_payload && data.map_payload.stations) || [];
+  const sp = list.filter(
     (s) =>
       s.kind === "linked" &&
       typeof s.latitude === "number" &&
@@ -256,59 +371,38 @@ async function syncClubeCharger(env) {
   );
 
   const now = Date.now();
-  const stationStmts = [];
-  const connectorStmts = [];
-  const snapshotStmts = [];
-  const rollupStmts = [];
-  const pricingStmts = [];
-
+  const stations = [];
+  const metas = [];
+  const obs = [];
+  const pricing = [];
   for (const s of sp) {
     const stationId = "cc_" + s.id;
-    stationStmts.push(
-      env.DB.prepare(
-        `INSERT INTO stations (station_id, name, network, lat, lng, source) VALUES (?, ?, ?, ?, ?, 'clubecharger')
-         ON CONFLICT(station_id) DO UPDATE SET name=excluded.name, network=excluded.network, lat=excluded.lat, lng=excluded.lng, source='clubecharger'`
-      ).bind(stationId, s.name || "", s.operator_display_name || "ClubeCharger", s.latitude, s.longitude)
-    );
-
-    const connectors = s.connector_slots || [];
-    connectors.forEach((c, idx) => {
-      const power = parseBRNumber(c.power_label);
-      const current = AC_CONNECTOR_TYPES.has(c.type) ? "AC" : "DC";
-      connectorStmts.push(
-        env.DB.prepare(
-          `INSERT INTO connector_meta (station_id, connector_index, power, current) VALUES (?, ?, ?, ?)
-           ON CONFLICT(station_id, connector_index) DO UPDATE SET power=excluded.power, current=excluded.current`
-        ).bind(stationId, idx, power, current)
-      );
-      const state = normalizeCcStatus(c.status);
-      snapshotStmts.push(
-        env.DB.prepare(`INSERT INTO status_snapshots (station_id, connector_index, state, captured_at) VALUES (?, ?, ?, ?)`).bind(
-          stationId,
-          idx,
-          state,
-          now
-        )
-      );
-      rollupStmts.push(rollupStmt(env, stationId, idx, state, now));
+    stations.push({ id: stationId, name: s.name || "", network: s.operator_display_name || "ClubeCharger", lat: s.latitude, lng: s.longitude, priv: 0 });
+    (s.connector_slots || []).forEach((c, idx) => {
+      metas.push({ id: stationId, idx, power: parseBRNumber(c.power_label), current: AC_CONNECTOR_TYPES.has(c.type) ? "AC" : "DC" });
+      obs.push({ sid: stationId, idx, state: normalizeCcStatus(c.status) });
     });
-
     const price = parseBRNumber(s.pricing && s.pricing.active_price_label);
-    if (price !== null) {
-      pricingStmts.push(
-        env.DB.prepare(
-          `INSERT INTO station_pricing (station_id, price_per_kwh, idle_fee_enabled, idle_fee_value, currency, updated_at) VALUES (?, ?, 0, NULL, 'BRL', ?)
-           ON CONFLICT(station_id) DO UPDATE SET price_per_kwh=excluded.price_per_kwh, currency=excluded.currency, updated_at=excluded.updated_at`
-        ).bind(stationId, price, now)
-      );
-    }
+    if (price !== null) pricing.push({ id: stationId, price });
   }
 
-  await runBatches(env.DB, stationStmts);
-  await runBatches(env.DB, connectorStmts);
-  await runBatches(env.DB, snapshotStmts);
-  await runBatches(env.DB, rollupStmts);
-  await runBatches(env.DB, pricingStmts);
+  const extraStmts = pricing.map((p) =>
+    env.DB.prepare(
+      `INSERT INTO station_pricing (station_id, price_per_kwh, idle_fee_enabled, idle_fee_value, currency, updated_at) VALUES (?, ?, 0, NULL, 'BRL', ?)
+       ON CONFLICT(station_id) DO UPDATE SET price_per_kwh=excluded.price_per_kwh, currency=excluded.currency, updated_at=excluded.updated_at`
+    ).bind(p.id, p.price, now)
+  );
+
+  await syncCatalog(env, state, {
+    hashKey: "hash_cc",
+    source: "clubecharger",
+    sourceSql: "source = 'clubecharger'",
+    stations,
+    metas,
+    extraStmts,
+    extraKey: JSON.stringify(pricing),
+  });
+  return obs;
 }
 
 function parseGoElectricConnectors(inlineStr) {
@@ -328,21 +422,25 @@ function parseGoElectricConnectors(inlineStr) {
 
 // GO Electric: lista embutida direto no HTML da página deles (window.GE_STATIONS),
 // sem endpoint de API separado. Dado é estático (sem status ao vivo nem preço) — só
-// cria estação + conectores, sem status_snapshots, para não fingir monitoramento que
+// cria estação + conectores, sem registro de status, para não fingir monitoramento que
 // não existe. A UI já trata isso como "sem dado de conector" naturalmente.
-async function syncGoElectric(env) {
+async function syncGoElectric(env, state) {
   const res = await fetch(GOELECTRIC_PAGE_URL, { headers: FETCH_HEADERS });
   if (!res.ok) return;
   const html = await res.text();
   const match = html.match(/window\.GE_STATIONS\s*=\s*(\[.*?\]);/s);
   if (!match) return;
-  let stations;
+  let list;
   try {
-    stations = JSON.parse(match[1]);
+    list = JSON.parse(match[1]);
   } catch {
     return;
   }
-  const spAll = stations.filter((s) => s.state === "SP" && typeof s.lat === "number" && typeof s.lng === "number");
+  const spAll = list.filter((s) => s.state === "SP" && typeof s.lat === "number" && typeof s.lng === "number");
+
+  // Página inalterada desde a última coleta: nada a fazer (evita até a consulta de dedup).
+  const rawHash = await sha256Hex(JSON.stringify(spAll));
+  if (state.hash_ge === rawHash) return;
 
   // Não duplica postos que já existem via outra fonte (mesmo local físico, ~300m).
   const existing = await env.DB.prepare(`SELECT lat, lng FROM stations WHERE source != 'goelectric'`).all();
@@ -350,84 +448,84 @@ async function syncGoElectric(env) {
   const isDuplicate = (lat, lng) => existing.results.some((e) => Math.abs(e.lat - lat) < DEDUPE_DEGREES && Math.abs(e.lng - lng) < DEDUPE_DEGREES);
   const sp = spAll.filter((s) => !isDuplicate(s.lat, s.lng));
 
-  const stationStmts = [];
-  const connectorStmts = [];
+  const stations = [];
+  const metas = [];
   for (const s of sp) {
     const stationId = "ge_" + s.slug;
-    stationStmts.push(
-      env.DB.prepare(
-        `INSERT INTO stations (station_id, name, network, lat, lng, source) VALUES (?, ?, ?, ?, ?, 'goelectric')
-         ON CONFLICT(station_id) DO UPDATE SET name=excluded.name, network=excluded.network, lat=excluded.lat, lng=excluded.lng, source='goelectric'`
-      ).bind(stationId, s.name || "", "GO Electric", s.lat, s.lng)
-    );
-    const connectors = parseGoElectricConnectors(s.connectors_inline);
-    connectors.forEach((c, idx) => {
-      const current = AC_CONNECTOR_TYPES.has(c.type) ? "AC" : "DC";
-      connectorStmts.push(
-        env.DB.prepare(
-          `INSERT INTO connector_meta (station_id, connector_index, power, current) VALUES (?, ?, ?, ?)
-           ON CONFLICT(station_id, connector_index) DO UPDATE SET power=excluded.power, current=excluded.current`
-        ).bind(stationId, idx, c.power, current)
-      );
+    stations.push({ id: stationId, name: s.name || "", network: "GO Electric", lat: s.lat, lng: s.lng, priv: 0 });
+    parseGoElectricConnectors(s.connectors_inline).forEach((c, idx) => {
+      metas.push({ id: stationId, idx, power: c.power, current: AC_CONNECTOR_TYPES.has(c.type) ? "AC" : "DC" });
     });
   }
 
-  await runBatches(env.DB, stationStmts);
-  await runBatches(env.DB, connectorStmts);
+  await syncCatalog(env, state, { hashKey: "hash_ge", hashOverride: rawHash, source: "goelectric", sourceSql: "source = 'goelectric'", stations, metas });
 }
 
 async function runTick(env) {
-  const spIds = await syncStationsAndSnapshots(env);
-  await syncPricingBatch(env, spIds);
-  await syncClubeCharger(env);
-  await syncGoElectric(env);
+  const now = Date.now();
+  const meta = await loadSyncMeta(env);
+  const tupi = await syncStationsAndSnapshots(env, meta.state);
+  const obs = [...tupi.obs];
+  try {
+    obs.push(...(await syncClubeCharger(env, meta.state)));
+  } catch (err) {
+    console.error("clubecharger_sync_failed", String(err));
+  }
+  try {
+    await syncGoElectric(env, meta.state);
+  } catch (err) {
+    console.error("goelectric_sync_failed", String(err));
+  }
+  await syncPricingBatch(env, tupi.ids);
+  await recordStates(env, obs, now, meta);
 }
 
-// Uso/disponibilidade por conector numa janela — lê status_snapshots bruto pras janelas
-// curtas (24h/7d, poucas linhas) e o agregado connector_daily_stats pras longas
-// (15d/30d/acumulado), que senão viram uma varredura de milhões de linhas a cada
-// carregamento de página (ver RAW_SCAN_WINDOWS).
-async function getUptimeStats(env, windowKey, sinceMs) {
+// Uso/disponibilidade por conector numa janela, em "ticks equivalentes" (ms / 5 min).
+// 24h/7d integram os eventos de mudança de classe da janela; 15d/30d/acumulado somam o
+// agregado diário (connector_daily_stats, só intervalos já fechados) e acrescentam o
+// intervalo ainda aberto de cada conector (connector_state.since até o último tick).
+// Ver worker-intervals.js.
+async function getUptimeStats(env, windowKey, sinceMs, meta) {
+  const end = meta.lastTick || 0;
+  const acc = new Map();
+  const stateRes = await env.DB.prepare(`SELECT station_id, connector_index, cls, since FROM connector_state`).all();
+  if (RAW_SCAN_WINDOWS.has(windowKey)) {
+    const evRes = await env.DB.prepare(
+      `SELECT station_id, connector_index, cls, prev_cls, at FROM connector_events WHERE at > ? AND at <= ? ORDER BY at`
+    )
+      .bind(sinceMs, end)
+      .all();
+    const evByKey = new Map();
+    for (const e of evRes.results) {
+      const k = e.station_id + ":" + e.connector_index;
+      if (!evByKey.has(k)) evByKey.set(k, []);
+      evByKey.get(k).push({ cls: e.cls, prev: e.prev_cls, at: e.at });
+    }
+    for (const r of stateRes.results) {
+      const k = r.station_id + ":" + r.connector_index;
+      acc.set(k, integrate(segmentsFor(evByKey.get(k) || [], r.cls, sinceMs, end), meta.gaps));
+    }
+  } else {
+    const winStart = windowKey === "all" ? 0 : dayBucket(sinceMs);
+    const dailyRes = await env.DB.prepare(
+      `SELECT station_id, connector_index, SUM(samples) AS t, SUM(ok_samples) AS o, SUM(charging_samples) AS c
+       FROM connector_daily_stats WHERE day >= ? GROUP BY station_id, connector_index`
+    )
+      .bind(winStart)
+      .all();
+    for (const d of dailyRes.results) acc.set(d.station_id + ":" + d.connector_index, { total: d.t, ok: d.o, charging: d.c });
+    for (const r of stateRes.results) {
+      const k = r.station_id + ":" + r.connector_index;
+      const open = integrate([{ cls: r.cls, from: Math.max(r.since, winStart), to: end }], meta.gaps);
+      const cur = acc.get(k) || { total: 0, ok: 0, charging: 0 };
+      acc.set(k, { total: cur.total + open.total, ok: cur.ok + open.ok, charging: cur.charging + open.charging });
+    }
+  }
   const statsByKey = new Map();
-  const res = RAW_SCAN_WINDOWS.has(windowKey)
-    ? await env.DB.prepare(
-        `SELECT station_id, connector_index,
-           AVG(CASE WHEN state IN ('Available','Charging','Preparing','Finishing','Reserved') THEN 1.0 ELSE 0.0 END) AS uptime_pct,
-           AVG(CASE WHEN state = 'Charging' THEN 1.0 ELSE 0.0 END) AS utilization_pct,
-           COUNT(*) AS samples
-         FROM status_snapshots WHERE captured_at > ? GROUP BY station_id, connector_index`
-      ).bind(sinceMs).all()
-    : await env.DB.prepare(
-        `SELECT station_id, connector_index,
-           SUM(ok_samples) * 1.0 / SUM(samples) AS uptime_pct,
-           SUM(charging_samples) * 1.0 / SUM(samples) AS utilization_pct,
-           SUM(samples) AS samples
-         FROM connector_daily_stats WHERE day >= ? GROUP BY station_id, connector_index`
-      ).bind(dayBucket(sinceMs)).all();
-  for (const u of res.results)
-    statsByKey.set(u.station_id + ":" + u.connector_index, { pct: u.uptime_pct, utilization: u.utilization_pct, samples: u.samples });
+  for (const [k, a] of acc) {
+    if (a.total > 0) statsByKey.set(k, { pct: a.ok / a.total, utilization: a.charging / a.total, samples: Math.round(a.total) });
+  }
   return statsByKey;
-}
-
-// Mesma ideia que getUptimeStats, mas escopado a uma estação só (usado no modal de
-// detalhe, que já tinha essa lógica por conector separada da lista).
-async function getStationConnectorStats(env, stationId, windowKey, sinceMs) {
-  const res = RAW_SCAN_WINDOWS.has(windowKey)
-    ? await env.DB.prepare(
-        `SELECT connector_index,
-                AVG(CASE WHEN state = 'Charging' THEN 1.0 ELSE 0.0 END) AS utilization_pct,
-                AVG(CASE WHEN state IN ('Available','Charging','Preparing','Finishing','Reserved') THEN 1.0 ELSE 0.0 END) AS uptime_pct,
-                COUNT(*) AS samples
-         FROM status_snapshots WHERE station_id = ? AND captured_at > ? GROUP BY connector_index`
-      ).bind(stationId, sinceMs).all()
-    : await env.DB.prepare(
-        `SELECT connector_index,
-                SUM(charging_samples) * 1.0 / SUM(samples) AS utilization_pct,
-                SUM(ok_samples) * 1.0 / SUM(samples) AS uptime_pct,
-                SUM(samples) AS samples
-         FROM connector_daily_stats WHERE station_id = ? AND day >= ? GROUP BY connector_index`
-      ).bind(stationId, dayBucket(sinceMs)).all();
-  return res.results;
 }
 
 async function buildEletropostosPayload(env, windowKey) {
@@ -436,18 +534,12 @@ async function buildEletropostosPayload(env, windowKey) {
   const since = windowKey === "all" ? 0 : now - windowDays * 24 * 3600 * 1000;
   const windowHours = windowDays * 24;
 
+  const meta = await loadSyncMeta(env);
   const [stationsRes, connectorsRes, latestRes, statsByKey, pricingRes] = await Promise.all([
     env.DB.prepare(`SELECT station_id, name, network, lat, lng, source, private FROM stations`).all(),
     env.DB.prepare(`SELECT station_id, connector_index, power, current FROM connector_meta`).all(),
-    env.DB.prepare(
-      `SELECT ss.station_id, ss.connector_index, ss.state
-       FROM status_snapshots ss
-       INNER JOIN (
-         SELECT station_id, connector_index, MAX(captured_at) AS max_captured
-         FROM status_snapshots WHERE captured_at > ? GROUP BY station_id, connector_index
-       ) latest ON ss.station_id = latest.station_id AND ss.connector_index = latest.connector_index AND ss.captured_at = latest.max_captured`
-    ).bind(now - 3 * DAY_MS).all(),
-    getUptimeStats(env, windowKey, since),
+    env.DB.prepare(`SELECT station_id, connector_index, state FROM connector_state`).all(),
+    getUptimeStats(env, windowKey, since, meta),
     env.DB.prepare(`SELECT station_id, price_per_kwh, idle_fee_enabled, idle_fee_value, currency, updated_at FROM station_pricing`).all(),
   ]);
 
@@ -457,7 +549,9 @@ async function buildEletropostosPayload(env, windowKey) {
     connectorsByStation.get(c.station_id).set(c.connector_index, c);
   }
   const latestByKey = new Map();
-  for (const l of latestRes.results) latestByKey.set(l.station_id + ":" + l.connector_index, l.state);
+  // Status só vale se a coleta está recente; coleta parada há dias não vira "status atual".
+  const collectingRecently = meta.lastTick && now - meta.lastTick <= 3 * DAY_MS;
+  if (collectingRecently) for (const l of latestRes.results) latestByKey.set(l.station_id + ":" + l.connector_index, l.state);
   const pricingByStation = new Map();
   for (const p of pricingRes.results) pricingByStation.set(p.station_id, p);
 
@@ -520,6 +614,7 @@ async function buildEletropostosPayload(env, windowKey) {
 
   return {
     updatedAt: new Date().toISOString(),
+    dataAsOf: meta.lastTick ? new Date(meta.lastTick).toISOString() : null,
     source: "Tupi (api.tupinambaenergia.com.br) — dados públicos do mapa de eletropostos",
     window: windowKey,
     windowHours,
@@ -530,18 +625,10 @@ async function buildEletropostosPayload(env, windowKey) {
   };
 }
 
-async function buildTimeline(env, stationId, sinceMs, bucketMs) {
-  const res = await env.DB.prepare(
-    `SELECT captured_at, SUM(CASE WHEN state = 'Charging' THEN 1 ELSE 0 END) AS charging, COUNT(*) AS total
-     FROM status_snapshots WHERE station_id = ? AND captured_at > ? GROUP BY captured_at ORDER BY captured_at ASC`
-  )
-    .bind(stationId, sinceMs)
-    .all();
-  const points = res.results.map((r) => ({ t: r.captured_at, charging: r.charging, total: r.total }));
-  if (!bucketMs) return points;
-
-  // Agrupamento em JS (não em SQL) — divisão inteira do SQLite com parâmetros bound
-  // como REAL não trunca como esperado, o que fazia cada tick virar seu próprio "bucket".
+// Agrupa leituras brutas (ticks) em buckets — usado só pro histórico ANTERIOR à coleta por
+// eventos (status_snapshots, congelado). Agrupa em JS (não em SQL): divisão inteira do
+// SQLite com parâmetros bound como REAL não trunca como esperado.
+function bucketLegacyPoints(points, bucketMs) {
   const buckets = new Map();
   for (const p of points) {
     const key = Math.floor(p.t / bucketMs) * bucketMs;
@@ -556,18 +643,44 @@ async function buildTimeline(env, stationId, sinceMs, bucketMs) {
     .map(([t, b]) => ({ t, charging: Math.round((b.sumCharging / b.n) * 10) / 10, total: Math.round(b.sumTotal / b.n) }));
 }
 
-const TIMELINE_BUCKET_MS = { "24h": 0, "7d": 3600 * 1000, "15d": 24 * 3600 * 1000, "30d": 24 * 3600 * 1000, all: 24 * 3600 * 1000 };
+const TIMELINE_BUCKET_MS = { "24h": 5 * 60 * 1000, "7d": 3600 * 1000, "15d": DAY_MS, "30d": DAY_MS, all: DAY_MS };
 
 async function buildStationDetail(env, stationId) {
-  const [stationRow, connectorsRes, pricingRow] = await Promise.all([
+  const [stationRow, connectorsRes, pricingRow, meta, stateRes, evRes, dailyRes] = await Promise.all([
     env.DB.prepare(`SELECT station_id, name, network, lat, lng, source, private FROM stations WHERE station_id = ?`).bind(stationId).first(),
     env.DB.prepare(`SELECT connector_index, power, current FROM connector_meta WHERE station_id = ?`).bind(stationId).all(),
     env.DB.prepare(`SELECT price_per_kwh, idle_fee_enabled, idle_fee_value, currency, updated_at FROM station_pricing WHERE station_id = ?`)
       .bind(stationId)
       .first(),
+    loadSyncMeta(env),
+    env.DB.prepare(`SELECT connector_index, cls, since FROM connector_state WHERE station_id = ?`).bind(stationId).all(),
+    env.DB.prepare(`SELECT connector_index, cls, prev_cls, at FROM connector_events WHERE station_id = ? ORDER BY at`).bind(stationId).all(),
+    env.DB.prepare(
+      `SELECT connector_index, day, samples, ok_samples, charging_samples FROM connector_daily_stats WHERE station_id = ?`
+    )
+      .bind(stationId)
+      .all(),
   ]);
 
   if (!stationRow) return null;
+
+  const end = meta.lastTick || 0;
+  const now = Date.now();
+  // Histórico bruto antigo (status_snapshots) só vale até o início da coleta por eventos.
+  const legacyUntil = meta.trackingStart || now + 1;
+  const legacyRes = await env.DB.prepare(
+    `SELECT captured_at, SUM(CASE WHEN state = 'Charging' THEN 1 ELSE 0 END) AS charging, COUNT(*) AS total
+     FROM status_snapshots WHERE station_id = ? AND captured_at < ? GROUP BY captured_at ORDER BY captured_at ASC`
+  )
+    .bind(stationId, legacyUntil)
+    .all();
+  const legacyPoints = legacyRes.results.map((r) => ({ t: r.captured_at, charging: r.charging, total: r.total }));
+
+  const evByIdx = new Map();
+  for (const e of evRes.results) {
+    if (!evByIdx.has(e.connector_index)) evByIdx.set(e.connector_index, []);
+    evByIdx.get(e.connector_index).push({ cls: e.cls, prev: e.prev_cls, at: e.at });
+  }
 
   const totalConnectors = connectorsRes.results.length;
   const hasSuspiciousPower = connectorsRes.results.some((c) => c.power && c.power > MAX_PLAUSIBLE_POWER_KW);
@@ -577,12 +690,50 @@ async function buildStationDetail(env, stationId) {
   const timelineByWindow = {};
   for (const key of Object.keys(WINDOW_DAYS)) {
     const days = WINDOW_DAYS[key];
-    const since = key === "all" ? 0 : Date.now() - days * 24 * 3600 * 1000;
+    const since = key === "all" ? 0 : now - days * 24 * 3600 * 1000;
     const hours = days * 24;
-    timelineByWindow[key] = await buildTimeline(env, stationId, since, TIMELINE_BUCKET_MS[key]);
+    const bucketMs = TIMELINE_BUCKET_MS[key];
+
+    // Linha do tempo "carros carregando": histórico antigo (até o início da coleta por
+    // eventos) + eventos novos.
+    const legacyCut = meta.trackingStart ? Math.floor(meta.trackingStart / bucketMs) * bucketMs : legacyUntil;
+    const legacy = bucketLegacyPoints(
+      legacyPoints.filter((p) => p.t > since && p.t < legacyCut),
+      bucketMs
+    );
+    const newSince = Math.max(since, meta.trackingStart || 0);
+    const tlConnectors = stateRes.results.map((st) => ({ segs: segmentsFor(evByIdx.get(st.connector_index) || [], st.cls, newSince, end) }));
+    const fresh = meta.trackingStart && end > newSince ? timelinePoints(tlConnectors, meta.gaps, newSince, end, bucketMs) : [];
+    timelineByWindow[key] = [...legacy.filter((p) => p.t < legacyCut), ...fresh];
+
     // Por conector, não agregado — cada conector tem seu próprio teto de potência
     // (um AC de 22kW não entrega 40kWh/h só porque a média inclui um DC de 150kW).
-    const perConnResults = await getStationConnectorStats(env, stationId, key, since);
+    const perConnResults = [];
+    for (const st of stateRes.results) {
+      let acc;
+      if (RAW_SCAN_WINDOWS.has(key)) {
+        acc = integrate(segmentsFor(evByIdx.get(st.connector_index) || [], st.cls, since, end), meta.gaps);
+      } else {
+        const winStart = key === "all" ? 0 : dayBucket(since);
+        acc = { total: 0, ok: 0, charging: 0 };
+        for (const d of dailyRes.results) {
+          if (d.connector_index !== st.connector_index || d.day < winStart) continue;
+          acc.total += d.samples;
+          acc.ok += d.ok_samples;
+          acc.charging += d.charging_samples;
+        }
+        const open = integrate([{ cls: st.cls, from: Math.max(st.since, winStart), to: end }], meta.gaps);
+        acc = { total: acc.total + open.total, ok: acc.ok + open.ok, charging: acc.charging + open.charging };
+      }
+      if (acc.total > 0) {
+        perConnResults.push({
+          connector_index: st.connector_index,
+          utilization_pct: acc.charging / acc.total,
+          uptime_pct: acc.ok / acc.total,
+          samples: Math.round(acc.total),
+        });
+      }
+    }
     const rows = perConnResults.filter((r) => r.samples >= MIN_SAMPLES_FOR_ESTIMATE);
     const enough = rows.length > 0;
 
@@ -590,8 +741,8 @@ async function buildStationDetail(env, stationId) {
     if (enough && pricingRow?.price_per_kwh) {
       let sum = 0;
       for (const r of rows) {
-        const meta = connectorsRes.results.find((c) => c.connector_index === r.connector_index);
-        const power = meta?.power;
+        const metaRow = connectorsRes.results.find((c) => c.connector_index === r.connector_index);
+        const power = metaRow?.power;
         const energyPerHour = power ? Math.min(ENERGY_PER_HOUR_KWH, power) : ENERGY_PER_HOUR_KWH;
         sum += r.utilization_pct * hours * energyPerHour * pricingRow.price_per_kwh;
       }

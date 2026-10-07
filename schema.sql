@@ -1,5 +1,7 @@
 DROP TABLE IF EXISTS status_snapshots;
 DROP TABLE IF EXISTS connector_daily_stats;
+DROP TABLE IF EXISTS connector_state;
+DROP TABLE IF EXISTS connector_events;
 DROP TABLE IF EXISTS station_pricing;
 DROP TABLE IF EXISTS connector_meta;
 DROP TABLE IF EXISTS stations;
@@ -23,6 +25,9 @@ CREATE TABLE connector_meta (
   PRIMARY KEY (station_id, connector_index)
 );
 
+-- LEGADO: histórico bruto (uma linha por conector a cada tick) até a troca pra coleta por
+-- eventos. Não recebe mais gravações (estourava a cota gratuita do D1); só leitura, pra
+-- manter o gráfico dos dias anteriores. Pode ser dropada depois de 30 dias.
 CREATE TABLE status_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   station_id TEXT NOT NULL,
@@ -48,6 +53,28 @@ CREATE TABLE connector_daily_stats (
   PRIMARY KEY (station_id, connector_index, day)
 );
 CREATE INDEX idx_daily_stats_day ON connector_daily_stats(day);
+
+-- Coleta por eventos: só grava quando a classe do conector muda (C=carregando,
+-- O=operacional sem carregar, P=problema). connector_state guarda o estado atual (e desde
+-- quando a classe atual vale); connector_events é o log de mudanças (prev_cls NULL = primeiro
+-- registro do conector). connector_daily_stats passa a guardar intervalos FECHADOS, em
+-- "ticks equivalentes" (ms / 5 min), compatível com o histórico antigo de leituras.
+CREATE TABLE connector_state (
+  station_id TEXT NOT NULL,
+  connector_index INTEGER NOT NULL,
+  state TEXT NOT NULL,
+  cls TEXT NOT NULL,
+  since INTEGER NOT NULL,
+  PRIMARY KEY (station_id, connector_index)
+);
+CREATE TABLE connector_events (
+  station_id TEXT NOT NULL,
+  connector_index INTEGER NOT NULL,
+  cls TEXT NOT NULL,
+  prev_cls TEXT,
+  at INTEGER NOT NULL
+);
+CREATE INDEX idx_events_station_time ON connector_events(station_id, at);
 
 CREATE TABLE station_pricing (
   station_id TEXT PRIMARY KEY,
