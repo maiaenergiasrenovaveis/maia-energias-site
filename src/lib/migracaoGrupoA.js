@@ -59,7 +59,8 @@ export function calcularInvestimentoMigracao(c) {
  * @param {number} p.tarifaDemanda - R$/kW
  * @param {boolean} p.usarMercadoLivre
  * @param {number} p.tarifaMercadoLivre - R$/kWh, só energia (TE)
- * @param {number} p.tarifaTusd - R$/kWh, encargo de fio (continua devido mesmo no ML)
+ * @param {number} p.tarifaTusd - R$/kWh, TUSD FORA PONTA, encargo de fio (continua devido mesmo no ML)
+ * @param {number} [p.tarifaTusdPonta] - R$/kWh, TUSD PONTA (se ausente/0, usa tarifaTusd)
  * @param {number} p.iluminacaoPublica
  * @param {number} p.outros
  * @param {number} [p.multaUltrapassagem] - R$/mês, multa por ultrapassagem de demanda no cenário Grupo A
@@ -87,6 +88,7 @@ export function calcularCenariosMigracao(p) {
   let tarifaDemanda = p.tarifaDemanda;
   let tarifaMercadoLivre = p.tarifaMercadoLivre ?? null;
   let tarifaTusd = p.tarifaTusd ?? 0;
+  let tarifaTusdPonta = p.tarifaTusdPonta > 0 ? p.tarifaTusdPonta : tarifaTusd;
 
   const linhas = [];
   let economiaAcumulada = 0;
@@ -100,6 +102,7 @@ export function calcularCenariosMigracao(p) {
       tarifaDemanda *= 1 + reajusteTarifario;
       if (tarifaMercadoLivre != null) tarifaMercadoLivre *= 1 + reajusteTarifario;
       tarifaTusd *= 1 + reajusteTarifario;
+      tarifaTusdPonta *= 1 + reajusteTarifario;
     }
 
     const grupoBProjetado = calcularContaGrupoB({
@@ -118,6 +121,7 @@ export function calcularCenariosMigracao(p) {
       tarifaDemanda,
       tarifaMercadoLivre,
       tarifaTusd,
+      tarifaTusdPonta,
       mercadoLivre: usarMercadoLivre,
       reativoExcedente: p.reativoExcedente ?? 0,
       multaUltrapassagem: p.multaUltrapassagem ?? 0,

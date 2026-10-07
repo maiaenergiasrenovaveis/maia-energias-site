@@ -440,8 +440,13 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
               <input id="b-tarifa-ml" type="number" step="0.0001" value="0.25" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
             </div>
             <div>
-              <label class="block text-[11px] font-semibold text-slate-500 mb-1">TUSD (R$/kWh) — continua devido à distribuidora</label>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">TUSD fora ponta (R$/kWh) — continua devido à distribuidora</label>
               <input id="b-tarifa-tusd" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">TUSD ponta (R$/kWh) — continua devido à distribuidora</label>
+              <input id="b-tarifa-tusd-ponta" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+              <p class="text-[10px] text-slate-400 mt-1">No Mercado Livre a TUSD continua sendo cobrada por posto horário (a ponta é bem mais cara). Preenchida pela busca ANEEL; se deixar 0, usa o valor fora ponta (comportamento antigo).</p>
             </div>
           </div>
         </div>
@@ -644,8 +649,13 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
               <input id="m-tarifa-ml" type="number" step="0.0001" value="0.29" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
             </div>
             <div>
-              <label class="block text-[11px] font-semibold text-slate-500 mb-1">TUSD (R$/kWh) — continua devido à distribuidora</label>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">TUSD fora ponta (R$/kWh) — continua devido à distribuidora</label>
               <input id="m-tarifa-tusd" type="number" step="0.0001" value="0.35" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">TUSD ponta (R$/kWh) — continua devido à distribuidora</label>
+              <input id="m-tarifa-tusd-ponta" type="number" step="0.0001" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+              <p class="text-[10px] text-slate-400 mt-1">No Mercado Livre a TUSD continua sendo cobrada por posto horário (a ponta é bem mais cara). Preenchida pela busca ANEEL; se deixar 0, usa o valor fora ponta (comportamento antigo).</p>
             </div>
           </div>
         </div>

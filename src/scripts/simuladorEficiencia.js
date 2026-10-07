@@ -64,6 +64,7 @@ function aplicarImpostoTarifaAneel({
   tarifaForaPontaId,
   tarifaDemandaId,
   tarifaTusdId,
+  tarifaTusdPontaId,
   tePontaId,
   tusdPontaId,
   teForaPontaId,
@@ -79,6 +80,7 @@ function aplicarImpostoTarifaAneel({
   $(tarifaForaPontaId).value = (bruta.tarifaForaPonta / fatorGrossUp).toFixed(4);
   if (bruta.tarifaDemanda != null) $(tarifaDemandaId).value = (bruta.tarifaDemanda / fatorGrossUp).toFixed(2);
   if (tarifaTusdId && $(tarifaTusdId) && bruta.tarifaTusd != null) $(tarifaTusdId).value = (bruta.tarifaTusd / fatorGrossUp).toFixed(4);
+  if (tarifaTusdPontaId && $(tarifaTusdPontaId) && bruta.tusdPonta != null) $(tarifaTusdPontaId).value = (bruta.tusdPonta / fatorGrossUp).toFixed(4);
   if (tePontaId && $(tePontaId) && bruta.tePonta != null) $(tePontaId).value = (bruta.tePonta / fatorGrossUp).toFixed(4);
   if (tusdPontaId && $(tusdPontaId) && bruta.tusdPonta != null) $(tusdPontaId).value = (bruta.tusdPonta / fatorGrossUp).toFixed(4);
   if (teForaPontaId && $(teForaPontaId) && bruta.teForaPonta != null) $(teForaPontaId).value = (bruta.teForaPonta / fatorGrossUp).toFixed(4);
@@ -97,6 +99,7 @@ async function buscarTarifaAneel({
   tarifaForaPontaId,
   tarifaDemandaId,
   tarifaTusdId,
+  tarifaTusdPontaId,
   tePontaId,
   tusdPontaId,
   teForaPontaId,
@@ -132,7 +135,7 @@ async function buscarTarifaAneel({
       teForaPonta: data.teForaPonta,
       tusdForaPonta: data.tusdForaPonta,
     });
-    aplicarImpostoTarifaAneel({ statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId, tarifaTusdId, tePontaId, tusdPontaId, teForaPontaId, tusdForaPontaId });
+    aplicarImpostoTarifaAneel({ statusId, ufId, icmsId, pisCofinsId, tarifaPontaId, tarifaForaPontaId, tarifaDemandaId, tarifaTusdId, tarifaTusdPontaId, tePontaId, tusdPontaId, teForaPontaId, tusdForaPontaId });
     const vigInicio = new Date(data.vigenciaInicio + "T00:00:00").toLocaleDateString("pt-BR");
     const vigFim = new Date(data.vigenciaFim + "T00:00:00").toLocaleDateString("pt-BR");
     status.innerHTML = `<span class="text-emerald-600 font-semibold">✓</span> ${data.fonte} — vigência ${vigInicio} a ${vigFim} (valores sem imposto; ICMS/PIS-COFINS aplicados acima).`;
@@ -153,6 +156,15 @@ function ligarSomaTusdTe(tusdId, teId, totalId) {
   };
   $(tusdId).addEventListener("input", atualizar);
   $(teId).addEventListener("input", atualizar);
+}
+
+// A TUSD do Mercado Livre é a MESMA TUSD da tarifa regulada de cada posto (só a TE é
+// negociada) — então editar a TUSD regulada atualiza a do ML, evitando duas fontes do mesmo
+// número divergindo. O campo do ML continua editável direto (ex.: pra simular outro cenário).
+function espelharCampo(origemId, destinoId) {
+  $(origemId).addEventListener("input", () => {
+    $(destinoId).value = $(origemId).value;
+  });
 }
 
 // ---------- Seleção de grupo tarifário ----------
@@ -1005,6 +1017,8 @@ function initBess() {
   // leria o campo "total" ainda com o valor antigo (só ficaria correto depois do próximo evento).
   ligarSomaTusdTe("b-tarifa-ponta-tusd", "b-tarifa-ponta-te", "b-tarifa-ponta");
   ligarSomaTusdTe("b-tarifa-fora-ponta-tusd", "b-tarifa-fora-ponta-te", "b-tarifa-fora-ponta");
+  espelharCampo("b-tarifa-ponta-tusd", "b-tarifa-tusd-ponta");
+  espelharCampo("b-tarifa-fora-ponta-tusd", "b-tarifa-tusd");
 
   // Mesma lógica/ordem de registro do ligarSomaTusdTe acima, mas aqui a conta é
   // potência (Wp × quantidade) × geração específica (kWh/kWp/mês), não uma soma direta — por
@@ -1035,6 +1049,7 @@ function initBess() {
     tarifaForaPontaId: "b-tarifa-fora-ponta",
     tarifaDemandaId: "b-tarifa-demanda",
     tarifaTusdId: "b-tarifa-tusd",
+    tarifaTusdPontaId: "b-tarifa-tusd-ponta",
     tePontaId: "b-tarifa-ponta-te",
     tusdPontaId: "b-tarifa-ponta-tusd",
     teForaPontaId: "b-tarifa-fora-ponta-te",
@@ -1210,6 +1225,7 @@ function computeBess() {
     usarMercadoLivre: $("b-usar-ml").checked,
     tarifaMercadoLivre: Number($("b-tarifa-ml").value) || null,
     tarifaTusd: Number($("b-tarifa-tusd").value) || 0,
+    tarifaTusdPonta: Number($("b-tarifa-tusd-ponta").value) || 0,
     rte,
     considerarBess,
     corrigirReativo,
@@ -1412,7 +1428,7 @@ async function exportarPdfBess() {
     solarModuloQtd > 0 ? `Usina solar com ${solarModuloQtd} módulos${solarModuloWp > 0 ? ` de ${num(solarModuloWp, 0)} Wp` : ""}.` : null,
     solarInversorQtd > 0 ? `${solarInversorQtd} inversor${solarInversorQtd > 1 ? "es" : ""}${solarInversorKw > 0 ? ` de ${num(solarInversorKw, 1)} kW` : ""}.` : null,
     cenarios.usarMercadoLivre
-      ? `Migração para o Mercado Livre de Energia, com energia estimada em R$ ${num(Number($("b-tarifa-ml").value), 4)}/kWh + TUSD de R$ ${num(Number($("b-tarifa-tusd").value), 4)}/kWh (continua devido à distribuidora local).`
+      ? `Migração para o Mercado Livre de Energia, com energia estimada em R$ ${num(Number($("b-tarifa-ml").value), 4)}/kWh + TUSD de R$ ${num(Number($("b-tarifa-tusd-ponta").value) || Number($("b-tarifa-tusd").value), 4)}/kWh na ponta e R$ ${num(Number($("b-tarifa-tusd").value), 4)}/kWh fora ponta (continua devida à distribuidora local).`
       : null,
     modoAquisicao === "eaas"
       ? "Modelo de assinatura (Energy as a Service) — sem investimento inicial, com mensalidade reajustada anualmente pelo IPCA."
@@ -1524,6 +1540,8 @@ function initMigracao() {
   // Precisa ser registrado ANTES do listener genérico abaixo — mesmo motivo do painel BESS.
   ligarSomaTusdTe("m-tarifa-ponta-tusd", "m-tarifa-ponta-te", "m-tarifa-ponta");
   ligarSomaTusdTe("m-tarifa-fora-ponta-tusd", "m-tarifa-fora-ponta-te", "m-tarifa-fora-ponta");
+  espelharCampo("m-tarifa-ponta-tusd", "m-tarifa-tusd-ponta");
+  espelharCampo("m-tarifa-fora-ponta-tusd", "m-tarifa-tusd");
 
   document.querySelectorAll("#painel-migracao input, #painel-migracao select").forEach((el) => {
     el.addEventListener("input", computeMigracao);
@@ -1542,6 +1560,7 @@ function initMigracao() {
     tarifaForaPontaId: "m-tarifa-fora-ponta",
     tarifaDemandaId: "m-tarifa-demanda",
     tarifaTusdId: "m-tarifa-tusd",
+    tarifaTusdPontaId: "m-tarifa-tusd-ponta",
     tePontaId: "m-tarifa-ponta-te",
     tusdPontaId: "m-tarifa-ponta-tusd",
     teForaPontaId: "m-tarifa-fora-ponta-te",
@@ -1607,6 +1626,7 @@ function computeMigracao() {
     usarMercadoLivre: $("m-usar-ml").checked,
     tarifaMercadoLivre: Number($("m-tarifa-ml").value) || null,
     tarifaTusd: Number($("m-tarifa-tusd").value) || 0,
+    tarifaTusdPonta: Number($("m-tarifa-tusd-ponta").value) || 0,
     investimentoMigracao: investimento.total,
     horizonteAnos: Number($("m-horizonte").value) || 10,
     reajusteTarifario: Number($("m-reajuste").value) / 100,

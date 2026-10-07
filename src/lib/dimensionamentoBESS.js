@@ -63,15 +63,20 @@ export function calcularBESS(p) {
  * @param {number} c.outros - R$/mês
  * @param {boolean} c.mercadoLivre - se true, usa tarifaMercadoLivre em vez das tarifas ponta/fora ponta
  * @param {number} c.tarifaMercadoLivre - R$/kWh (só a energia/TE negociada no Mercado Livre)
- * @param {number} c.tarifaTusd - R$/kWh (fio/TUSD, sempre pago à distribuidora local — mesmo no Mercado Livre)
+ * @param {number} c.tarifaTusd - R$/kWh (TUSD FORA PONTA — fio, sempre pago à distribuidora local, mesmo no Mercado Livre)
+ * @param {number} [c.tarifaTusdPonta] - R$/kWh (TUSD PONTA — costuma ser bem maior que a fora ponta; se ausente/0, cai no tarifaTusd, que era o comportamento antigo)
  * @param {number} [c.multaUltrapassagem] - R$/mês, multa por ultrapassagem de demanda (medida acima da contratada)
  */
 export function calcularContaGrupoA(c) {
   const energiaTotal = c.energiaPontaKwh + c.energiaForaPontaKwh;
-  // No Mercado Livre só a energia (TE) é negociada livremente; o TUSD continua sendo
-  // pago à distribuidora local independente de onde a energia é comprada.
+  // No Mercado Livre só a energia (TE) é negociada livremente; o TUSD continua sendo pago à
+  // distribuidora local independente de onde a energia é comprada — e o TUSD tem valor
+  // DIFERENTE por posto horário (ponta é bem mais caro), então cobra cada parcela de energia
+  // com o TUSD do seu próprio posto, não um TUSD único em cima de toda a energia.
+  const tusdForaPonta = c.tarifaTusd ?? 0;
+  const tusdPonta = c.tarifaTusdPonta > 0 ? c.tarifaTusdPonta : tusdForaPonta;
   const custoEnergia = c.mercadoLivre
-    ? energiaTotal * (c.tarifaMercadoLivre + (c.tarifaTusd ?? 0))
+    ? energiaTotal * c.tarifaMercadoLivre + c.energiaPontaKwh * tusdPonta + c.energiaForaPontaKwh * tusdForaPonta
     : c.energiaPontaKwh * c.tarifaPonta + c.energiaForaPontaKwh * c.tarifaForaPonta;
   const custoDemanda = c.demandaContratadaKw * c.tarifaDemanda;
   const total = custoEnergia + custoDemanda + (c.reativoExcedente ?? 0) + (c.multaUltrapassagem ?? 0) + (c.iluminacaoPublica ?? 0) + (c.outros ?? 0);
@@ -125,6 +130,7 @@ export function calcularCenariosGrupoA(p) {
   let tarifaForaPonta = p.tarifaForaPonta;
   let tarifaMercadoLivre = p.tarifaMercadoLivre ?? null;
   let tarifaTusd = p.tarifaTusd ?? 0;
+  let tarifaTusdPonta = p.tarifaTusdPonta > 0 ? p.tarifaTusdPonta : tarifaTusd;
   let mensalidadeEaas = p.mensalidadeEaasInicial ?? 0;
 
   for (let i = 0; i < horizonte; i++) {
@@ -134,6 +140,7 @@ export function calcularCenariosGrupoA(p) {
       tarifaForaPonta *= 1 + reajusteTarifario;
       if (tarifaMercadoLivre != null) tarifaMercadoLivre *= 1 + reajusteTarifario;
       tarifaTusd *= 1 + reajusteTarifario; // TUSD é regulado, reajusta junto com as demais tarifas de rede
+      tarifaTusdPonta *= 1 + reajusteTarifario;
       mensalidadeEaas *= 1 + ipca;
     }
 
@@ -169,6 +176,7 @@ export function calcularCenariosGrupoA(p) {
       tarifaForaPonta,
       tarifaMercadoLivre,
       tarifaTusd,
+      tarifaTusdPonta,
       mercadoLivre: usarMercadoLivre,
     });
 
@@ -276,6 +284,7 @@ export function calcularEscadaReducoesGrupoA(p) {
       tarifaForaPonta: p.tarifaForaPonta,
       tarifaMercadoLivre: p.tarifaMercadoLivre,
       tarifaTusd: p.tarifaTusd ?? 0,
+      tarifaTusdPonta: p.tarifaTusdPonta,
     }).total;
 
   const passos = [{ label: "Atual", total: calcularTotal() }];
