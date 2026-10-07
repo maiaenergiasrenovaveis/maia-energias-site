@@ -1532,6 +1532,11 @@ function initMigracao() {
     computeMigracao();
   });
 
+  $("m-usar-solar").addEventListener("change", () => {
+    $("m-solar-fields").classList.toggle("hidden", !$("m-usar-solar").checked);
+    computeMigracao();
+  });
+
   $("m-carga-tipo").addEventListener("change", () => {
     $("m-carga-outro-wrap").classList.toggle("hidden", $("m-carga-tipo").value !== "Outro");
     computeMigracao();
@@ -1627,6 +1632,7 @@ function computeMigracao() {
     tarifaMercadoLivre: Number($("m-tarifa-ml").value) || null,
     tarifaTusd: Number($("m-tarifa-tusd").value) || 0,
     tarifaTusdPonta: Number($("m-tarifa-tusd-ponta").value) || 0,
+    geracaoSolarMensalKwh: $("m-usar-solar").checked ? Number($("m-solar-geracao").value) || 0 : 0,
     investimentoMigracao: investimento.total,
     horizonteAnos: Number($("m-horizonte").value) || 10,
     reajusteTarifario: Number($("m-reajuste").value) / 100,
@@ -1674,6 +1680,7 @@ async function exportarPdfMigracao() {
   const temCarga = investimento.cargaValor > 0;
   const cargaPotencia = Number($("m-carga-potencia").value) || 0;
   const transformadorPotencia = Number($("m-transformador-potencia").value) || 0;
+  const geracaoSolar = $("m-usar-solar").checked ? Number($("m-solar-geracao").value) || 0 : 0;
 
   const diagnostico = [
     `Consumo atual (Grupo B, baixa tensão): ${num(Number($("m-consumo-atual").value), 0)} kWh/mês, sem demanda contratada.`,
@@ -1687,7 +1694,8 @@ async function exportarPdfMigracao() {
     `Migração da unidade consumidora de Grupo B para Grupo A (alta tensão), com nova demanda contratada de ${num(Number($("m-demanda").value), 0)} kW.`,
     `Construção de subestação/cabine primária própria: transformador${transformadorPotencia > 0 ? ` de ${num(transformadorPotencia, 0)} kVA` : ""}, obra civil, projeto elétrico/ART, medição e proteção, e conexão junto à distribuidora.`,
     temCarga ? `Fornecimento e instalação de ${cargaTipo.toLowerCase()}${cargaPotencia > 0 ? ` de ${num(cargaPotencia, 1)} kW` : ""}, preço final incluso no investimento total desta proposta.` : null,
-    `Comparação de tarifas no mesmo nível de consumo projetado: Grupo B ficaria em ${brl2(l1.contaGrupoBProjetada)}/mês, Grupo A${mlSufixo} em ${brl2(l1.contaGrupoAProjetada)}/mês.`,
+    geracaoSolar > 0 ? `Usina solar com geração estimada de ${num(geracaoSolar, 0)} kWh/mês, considerada igualmente nos dois cenários da comparação abaixo (abate o consumo no Grupo B e a energia fora ponta no Grupo A).` : null,
+    `Comparação de tarifas no mesmo nível de consumo projetado${geracaoSolar > 0 ? " (já com a geração solar)" : ""}: Grupo B ficaria em ${brl2(l1.contaGrupoBProjetada)}/mês, Grupo A${mlSufixo} em ${brl2(l1.contaGrupoAProjetada)}/mês.`,
   ].filter(Boolean);
 
   const tabelaFinanceira = [

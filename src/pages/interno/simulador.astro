@@ -658,6 +658,15 @@ import InternoLayout from "../../layouts/InternoLayout.astro";
               <p class="text-[10px] text-slate-400 mt-1">No Mercado Livre a TUSD continua sendo cobrada por posto horário (a ponta é bem mais cara). Preenchida pela busca ANEEL; se deixar 0, usa o valor fora ponta (comportamento antigo).</p>
             </div>
           </div>
+          <label class="flex items-center gap-2 mt-3 text-sm">
+            <input id="m-usar-solar" type="checkbox" class="h-4 w-4" />
+            <span class="font-semibold text-slate-600">Considerar usina solar</span>
+          </label>
+          <div id="m-solar-fields" class="mt-2 hidden">
+            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Geração solar estimada (kWh/mês)</label>
+            <input id="m-solar-geracao" type="number" step="1" value="0" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+            <p class="text-[10px] text-slate-400 mt-1">Estimativa simples: a mesma geração é abatida nos dois lados da comparação (Grupo B no consumo total; Grupo A só na energia fora ponta, sem passar de zero), então a usina não vira "economia da migração". Para dimensionar a usina em detalhe, use o módulo Solar.</p>
+          </div>
         </div>
       </div>
 

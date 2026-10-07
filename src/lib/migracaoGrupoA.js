@@ -64,6 +64,7 @@ export function calcularInvestimentoMigracao(c) {
  * @param {number} p.iluminacaoPublica
  * @param {number} p.outros
  * @param {number} [p.multaUltrapassagem] - R$/mês, multa por ultrapassagem de demanda no cenário Grupo A
+ * @param {number} [p.geracaoSolarMensalKwh] - geração solar estimada (kWh/mês), abatida igualmente em Grupo B e Grupo A
  * @param {number} p.investimentoMigracao - R$
  * @param {number} p.horizonteAnos
  * @param {number} p.reajusteTarifario - %a.a., aplicado às tarifas dos dois grupos
@@ -81,6 +82,15 @@ export function calcularCenariosMigracao(p) {
   });
 
   const consumoProjetadoTotal = p.energiaPontaKwhProjetado + p.energiaForaPontaKwhProjetado;
+
+  // Usina solar opcional: abate a MESMA geração nos dois lados da comparação (Grupo B e Grupo
+  // A), pra manter o princípio do módulo de isolar o efeito da estrutura tarifária — a usina
+  // não vira "economia da migração". No Grupo B abate do consumo total; no Grupo A abate só
+  // fora ponta (solar gera de dia; a ponta é à noite), sem passar de zero. Geração em kWh/mês
+  // já líquida (estimativa simples, sem simular simultaneidade/Fio B).
+  const geracaoSolarMensalKwh = Math.max(0, p.geracaoSolarMensalKwh ?? 0);
+  const energiaForaPontaComSolar = Math.max(0, p.energiaForaPontaKwhProjetado - geracaoSolarMensalKwh);
+  const consumoGrupoBComSolar = Math.max(0, consumoProjetadoTotal - geracaoSolarMensalKwh);
 
   let tarifaGrupoB = p.tarifaGrupoBAtual;
   let tarifaPonta = p.tarifaPonta;
@@ -106,7 +116,7 @@ export function calcularCenariosMigracao(p) {
     }
 
     const grupoBProjetado = calcularContaGrupoB({
-      consumoKwh: consumoProjetadoTotal,
+      consumoKwh: consumoGrupoBComSolar,
       tarifaGrupoB,
       iluminacaoPublica: p.iluminacaoPublica,
       outros: p.outros,
@@ -114,7 +124,7 @@ export function calcularCenariosMigracao(p) {
 
     const grupoAProjetado = calcularContaGrupoA({
       energiaPontaKwh: p.energiaPontaKwhProjetado,
-      energiaForaPontaKwh: p.energiaForaPontaKwhProjetado,
+      energiaForaPontaKwh: energiaForaPontaComSolar,
       demandaContratadaKw: p.demandaContratadaKw,
       tarifaPonta,
       tarifaForaPonta,
