@@ -1,7 +1,7 @@
 ---
 import "../styles/global.css";
 import { Image } from "astro:assets";
-import logoIcon from "../assets/logo-icon.png";
+import logo from "../assets/bluebell-logo.png";
 
 interface Props {
   title: string;
@@ -30,11 +30,10 @@ const navItems = [
     <header class="bg-maia-navy text-white sticky top-0 z-50">
       <div class="mx-auto max-w-7xl px-4 flex items-center justify-between h-16">
         <a href="/hub" class="flex items-center gap-2.5">
-          <Image src={logoIcon} alt="" height={32} class="h-8 w-auto" />
-          <span class="leading-tight">
-            <span class="block text-sm font-bold">MAIA</span>
-            <span class="block text-[9px] font-semibold uppercase tracking-wide text-white/60">Eletropostos SP</span>
+          <span class="rounded-lg bg-white px-2.5 py-1.5 flex items-center">
+            <Image src={logo} alt="Bluebell Electric" height={24} densities={[1, 2]} class="h-6 w-auto" />
           </span>
+          <span class="block text-[9px] font-semibold uppercase tracking-wide text-white/60">Eletropostos SP</span>
         </a>
         <nav class="hidden md:flex items-center gap-1">
           {

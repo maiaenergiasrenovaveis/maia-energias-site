@@ -62,7 +62,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
 
       <div class="rounded-xl bg-white border border-slate-200 p-4 mb-8 flex items-center justify-between flex-wrap gap-2">
         <div>
-          <p class="text-sm font-semibold text-maia-navy">Mercado total estimado (fonte: ABVE, jul/2026): <span class="text-maia-orange-dark">6.954 eletropostos em SP</span> <span class="text-slate-400 font-normal">(5.401 AC / 1.553 DC)</span></p>
+          <p class="text-sm font-semibold text-maia-navy">Mercado total estimado (fonte: ABVE/Tupi, ago/2026): <span class="text-maia-orange-dark">7.864 eletropostos em SP</span> <span class="text-slate-400 font-normal">(+910 no trimestre)</span></p>
           <p class="text-xs text-slate-400 mt-0.5">Nossa cobertura (via Tupi): <span id="market-coverage" class="font-semibold text-maia-navy"></span>. Número da ABVE é atualizado manualmente de vez em quando, não é dado ao vivo — <a href="https://abve.org.br/abve-data/bi-eletropostos/" target="_blank" rel="noopener" class="underline">ver painel da ABVE</a>.</p>
         </div>
       </div>
@@ -690,7 +690,7 @@ import PortalLayout from "../../layouts/PortalLayout.astro";
         allRegions = data.regions || [];
         document.getElementById("last-updated").textContent = "Atualizado " + new Date(data.updatedAt).toLocaleString("pt-BR");
         document.getElementById("price-coverage").textContent = `${(data.priceCoverage || 0).toLocaleString("pt-BR")} de ${data.count.toLocaleString("pt-BR")} postos`;
-        const ABVE_SP_TOTAL = 6954;
+        const ABVE_SP_TOTAL = 7864;
         document.getElementById("market-coverage").textContent =
           `${data.count.toLocaleString("pt-BR")} estações (${Math.round((data.count / ABVE_SP_TOTAL) * 100)}%)`;
         if (!map) {
