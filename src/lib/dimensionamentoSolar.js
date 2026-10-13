@@ -193,35 +193,34 @@ export function calcularPayback(dim, tarifas, capex, anoInicial, financeiro) {
   const tma = financeiro.tma ?? 0.1;
   const investimento = capex.valorFinalCliente;
 
-  // Mesmo ajuste de calcularContaMes1: sem isso, o payback assumiria que o sistema
-  // sempre cobre 100% do consumo, mesmo quando a potência ficou menor que o ideal
-  // (ex: limitada pela área do local).
-  const coberturaGeracao = dim.consumoSemTaxa > 0 ? Math.min(1, dim.geracaoMedia / dim.consumoSemTaxa) : 0;
-  const kwhInjetado = dim.consumoMedioMensal * (1 - tarifas.simultaneidadePercent) * coberturaGeracao;
-  const icmsSobreTusdPorKwh = tarifas.tusdSemImposto * tarifas.icmsPercent;
-
   const linhas = [];
   let economiaAcumulada = 0;
   let economiaAcumuladaDescontada = 0;
-  let contaSemSistemaAnual = dim.consumoMedioMensal * (tarifas.teSemImposto + tarifas.tusdSemImposto) * 12;
-  let taxaDispAnualAtual = 12 * dim.taxaDisp * (tarifas.teSemImposto + tarifas.tusdSemImposto);
-  let custoNaoCompensadoAnualAtual = dim.consumoSemTaxa * (1 - coberturaGeracao) * (tarifas.teSemImposto + tarifas.tusdSemImposto) * 12;
 
   for (let i = 0; i < horizonte; i++) {
     const ano = anoInicial + i;
     const anoRelativo = i + 1;
-    if (i > 0) {
-      contaSemSistemaAnual *= 1 + taxaInflacaoEnergia;
-      taxaDispAnualAtual *= 1 + taxaInflacaoEnergia;
-      custoNaoCompensadoAnualAtual *= 1 + taxaInflacaoEnergia;
-    }
-    const fioBDescontoRate = fioBPercent(ano) * tarifas.fioBRate;
-    const contaComSistemaAnual =
-      taxaDispAnualAtual +
-      tarifas.iluminacaoPublica * 12 +
-      kwhInjetado * icmsSobreTusdPorKwh * 12 +
-      kwhInjetado * fioBDescontoRate * 12 +
-      custoNaoCompensadoAnualAtual;
+    // A economia de cada ano é a MESMA conta do card "Conta de energia (mês 1)" (tarifas COM
+    // imposto — o que o cliente de fato paga na fatura), com TE/TUSD reajustadas pela inflação
+    // de energia e o cronograma de Fio B do ano. Antes o payback tinha uma conta própria em
+    // cima das tarifas SEM imposto (herdada da planilha): subestimava a economia (~25%) mesmo
+    // com tudo preenchido, e ficava negativa quando os campos "sem imposto" estavam zerados ou
+    // desalinhados dos "com imposto" (ex.: conta escaneada que só trouxe o valor com imposto).
+    // Assim o ano 1 bate exatamente com "Economia anual (ano 1)" mostrada na tela.
+    const fator = Math.pow(1 + taxaInflacaoEnergia, i);
+    const conta = calcularContaMes1(
+      dim,
+      {
+        ...tarifas,
+        teSemImposto: tarifas.teSemImposto * fator,
+        teComImposto: tarifas.teComImposto * fator,
+        tusdSemImposto: tarifas.tusdSemImposto * fator,
+        tusdComImposto: tarifas.tusdComImposto * fator,
+      },
+      ano
+    );
+    const contaSemSistemaAnual = conta.contaSemSolar * 12;
+    const contaComSistemaAnual = conta.contaComSolar * 12;
 
     const economia = contaSemSistemaAnual - contaComSistemaAnual;
     economiaAcumulada += economia;
