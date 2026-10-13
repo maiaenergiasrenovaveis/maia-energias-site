@@ -793,6 +793,11 @@ function computeSolar() {
     ${linhaHtml("Consumo médio usado no cálculo", `${num(dim.consumoMedioMensal, 0)} kWh/mês`)}
     ${linhaHtml("Conta sem solar", brl2(conta.contaSemSolar))}
     ${linhaHtml("Conta com solar", brl2(conta.contaComSolar))}
+    ${linhaHtml(`<span class="pl-3 text-xs">↳ Tarifa mínima (${num(dim.taxaDisp, 0)} kWh × TE+TUSD)</span>`, `<span class="text-xs">${brl2(conta.componentesComSolar.tarifaMinima)}</span>`)}
+    ${linhaHtml(`<span class="pl-3 text-xs">↳ Fio B — ${num(conta.kwhInjetadoFioB, 0)} kWh injetados × ${pct(conta.fioBPercentAno)} do Fio B</span>`, `<span class="text-xs">${brl2(conta.componentesComSolar.fioB)}</span>`)}
+    ${linhaHtml(`<span class="pl-3 text-xs">↳ ICMS s/ TUSD dos créditos</span>`, `<span class="text-xs">${brl2(conta.componentesComSolar.icmsSobreTusdCredito)}</span>`)}
+    ${linhaHtml(`<span class="pl-3 text-xs">↳ Iluminação pública</span>`, `<span class="text-xs">${brl2(conta.componentesComSolar.iluminacaoPublica)}</span>`)}
+    ${conta.componentesComSolar.custoNaoCompensado > 0 ? linhaHtml(`<span class="pl-3 text-xs">↳ Energia não compensada (${num(conta.consumoNaoCompensado, 0)} kWh a tarifa cheia)</span>`, `<span class="text-xs">${brl2(conta.componentesComSolar.custoNaoCompensado)}</span>`) : ""}
     ${linhaHtml("Desconto mensal", `${brl2(conta.descontoReais)} (${pct(conta.descontoPercent)})`)}
     ${linhaHtml("Economia anual (ano 1)", brl(conta.economiaAnual))}
   `;

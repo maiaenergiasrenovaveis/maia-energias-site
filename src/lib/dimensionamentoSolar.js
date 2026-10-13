@@ -177,10 +177,13 @@ export function calcularContaMes1(dim, tarifas, ano) {
     consumoNaoCompensado,
     contaSemSolar,
     contaComSolar,
+    // Parcelas que somam contaComSolar — expostas pra tela mostrar de onde sai o valor.
+    componentesComSolar: { tarifaMinima, icmsSobreTusdCredito, fioB, iluminacaoPublica: tarifas.iluminacaoPublica, custoNaoCompensado },
     descontoReais,
     descontoPercent,
     economiaAnual: descontoReais * 12,
     fioBBaseGrossedUp,
+    fioBPercentAno,
   };
 }
 
