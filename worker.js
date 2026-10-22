@@ -198,10 +198,11 @@ function dailyUpsertStmt(env, stationId, connectorIndex, slice) {
 //    agregado diário, grava um evento e reinicia o intervalo;
 //  - conector novo: grava o primeiro registro.
 // Períodos em que o cron ficou fora do ar viram "gaps" e não contam como observados.
-async function recordStates(env, obs, now, meta) {
+async function recordStates(env, obs, now, meta, { advanceTick = true } = {}) {
+  if (!advanceTick && obs.length === 0) return;
   const stmts = [];
   let gaps = meta.gaps;
-  if (meta.lastTick && now - meta.lastTick > GAP_THRESHOLD_MS) {
+  if (advanceTick && meta.lastTick && now - meta.lastTick > GAP_THRESHOLD_MS) {
     gaps = [...gaps, [meta.lastTick, now]].filter(([, end]) => end > now - GAP_RETENTION_MS);
     stmts.push(setSyncStateStmt(env, "gaps", JSON.stringify(gaps)));
   }
@@ -233,11 +234,15 @@ async function recordStates(env, obs, now, meta) {
     }
   }
 
-  stmts.push(setSyncStateStmt(env, "last_tick", now));
-  const today = dayBucket(now);
-  if (Number(meta.state.last_prune_day || 0) < today) {
-    stmts.push(env.DB.prepare(`DELETE FROM connector_events WHERE at < ?`).bind(now - EVENT_RETENTION_MS));
-    stmts.push(setSyncStateStmt(env, "last_prune_day", today));
+  // last_tick só avança quando a Tupi (fonte principal) foi lida; sem isso o período
+  // sem coleta dela vira "gap" quando ela voltar, em vez de contar como observado.
+  if (advanceTick) {
+    stmts.push(setSyncStateStmt(env, "last_tick", now));
+    const today = dayBucket(now);
+    if (Number(meta.state.last_prune_day || 0) < today) {
+      stmts.push(env.DB.prepare(`DELETE FROM connector_events WHERE at < ?`).bind(now - EVENT_RETENTION_MS));
+      stmts.push(setSyncStateStmt(env, "last_prune_day", today));
+    }
   }
   await runBatches(env.DB, stmts);
 }
@@ -464,8 +469,18 @@ async function syncGoElectric(env, state) {
 async function runTick(env) {
   const now = Date.now();
   const meta = await loadSyncMeta(env);
-  const tupi = await syncStationsAndSnapshots(env, meta.state);
-  const obs = [...tupi.obs];
+  // Tupi bloqueada/fora do ar não pode derrubar as outras fontes: cada uma segue
+  // independente. Na falha da Tupi, a base dela fica como está (nada é apagado) e o erro
+  // é relançado no fim só pra ficar visível nos logs do cron.
+  let tupi = null;
+  let tupiError = null;
+  try {
+    tupi = await syncStationsAndSnapshots(env, meta.state);
+  } catch (err) {
+    tupiError = err;
+    console.error("tupi_sync_failed", String(err));
+  }
+  const obs = tupi ? [...tupi.obs] : [];
   try {
     obs.push(...(await syncClubeCharger(env, meta.state)));
   } catch (err) {
@@ -476,8 +491,9 @@ async function runTick(env) {
   } catch (err) {
     console.error("goelectric_sync_failed", String(err));
   }
-  await syncPricingBatch(env, tupi.ids);
-  await recordStates(env, obs, now, meta);
+  if (tupi) await syncPricingBatch(env, tupi.ids);
+  await recordStates(env, obs, now, meta, { advanceTick: !!tupi });
+  if (tupiError) throw tupiError;
 }
 
 // Uso/disponibilidade por conector numa janela, em "ticks equivalentes" (ms / 5 min).
@@ -549,9 +565,9 @@ async function buildEletropostosPayload(env, windowKey) {
     connectorsByStation.get(c.station_id).set(c.connector_index, c);
   }
   const latestByKey = new Map();
-  // Status só vale se a coleta está recente; coleta parada há dias não vira "status atual".
-  const collectingRecently = meta.lastTick && now - meta.lastTick <= 3 * DAY_MS;
-  if (collectingRecently) for (const l of latestRes.results) latestByKey.set(l.station_id + ":" + l.connector_index, l.state);
+  // Mantém o último status conhecido mesmo com a coleta parada (ex.: Tupi bloqueando o
+  // acesso); a tela mostra a hora real do último status (dataAsOf) e avisa do atraso.
+  for (const l of latestRes.results) latestByKey.set(l.station_id + ":" + l.connector_index, l.state);
   const pricingByStation = new Map();
   for (const p of pricingRes.results) pricingByStation.set(p.station_id, p);
 
