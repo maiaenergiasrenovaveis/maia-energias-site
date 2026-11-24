@@ -13,7 +13,7 @@ Quem tem geração solar com créditos na conta recebe um desconto no uso da red
 
 ## Os números preliminares
 
-A estimativa da área técnica da ANEEL para o orçamento da CDE de 2027 indica um custo de cerca de **R$ 8,46 bilhões** com o desconto da geração distribuída, contra um teto de **R$ 4,03 bilhões**. A diferença, de aproximadamente R$ 4,4 bilhões no país, é o que gera o chamado fator preliminar de **52,4%**: de cada R$ 100 de desconto, cerca de R$ 52 voltariam. É um percentual sobre o desconto — **não sobre a conta inteira**.
+A estimativa da área técnica da ANEEL para o orçamento da CDE de 2027 indica um custo de cerca de **R$ 8,46 bilhões** com o desconto da geração distribuída, contra um teto de **R$ 4,03 bilhões**. A diferença, de aproximadamente R$ 4,4 bilhões no país, é o que gera o chamado fator preliminar de **52,4%**: de cada R$ 100 de desconto, cerca de R$ 52 voltariam. É um percentual sobre o desconto — **não sobre a conta inteira**. A mesma nota técnica da ANEEL traz também um fator próprio para as fontes incentivadas (usinas maiores), com estimativa de cerca de 10,3% (R$ 1,94 bilhão): ele vale para outra categoria e não deve ser confundido com o da geração distribuída.
 
 ## Quem paga
 
