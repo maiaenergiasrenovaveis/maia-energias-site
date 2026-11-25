@@ -139,7 +139,8 @@ function secaoParaEletroduto(secaoMm2, metodoInstalacao) {
 function secaoTerra(secaoFaseMm2) {
   if (secaoFaseMm2 <= 16) return secaoFaseMm2;
   if (secaoFaseMm2 <= 35) return 16;
-  return secaoFaseMm2 / 2;
+  // metade da fase, arredondada para cima até a bitola comercial (ex.: 185 → 92,5 → 95 mm²)
+  return SECOES_PADRAO.find((s) => s >= secaoFaseMm2 / 2) ?? secaoFaseMm2 / 2;
 }
 
 /**
